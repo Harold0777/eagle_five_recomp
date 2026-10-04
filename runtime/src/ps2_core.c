@@ -1,3 +1,4 @@
+/* Modified 2026 by Haroldo: Linux performance work (see git log). Original code under Apache-2.0, see LICENSE. */
 #include "ps2_runtime.h"
 
 #include <stdio.h>
@@ -253,7 +254,7 @@ void ps2_dispatch(ps2_ctx *ctx, u32 addr) {
     if (PS2_LIKELY(off < (ps2_text_hi - ps2_text_lo))) {
         ps2_fn f = ps2_fn_index[off >> 2];
         if (PS2_LIKELY(f != NULL)) {
-            PS2_TAIL return f(ctx);
+            return f(ctx);
         }
     }
     ps2_unknown_target(ctx, addr);

@@ -1,3 +1,4 @@
+/* Modified 2026 by Haroldo: Linux performance work (see git log). Original code under Apache-2.0, see LICENSE. */
 #include "ps2_runtime.h"
 #include "ps2_hle.h"
 #include "ps2_statecap.h"
@@ -1216,6 +1217,9 @@ static u64 field_ns(void) {
     return v;
 }
 
+static pthread_mutex_t vblank_cv_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t  vblank_cv      = PTHREAD_COND_INITIALIZER;
+
 static void *vblank_timer(void *unused) {
     u64 last_seen = 0;
     u64 fns = field_ns();
@@ -1234,10 +1238,14 @@ static void *vblank_timer(void *unused) {
         deadline += fns;
         now = mono_ns();
         if (now > deadline + 4ull * fns) deadline = now + fns;
-        if (__atomic_load_n(&vblank_pending, __ATOMIC_RELAXED) < 4)
+        if (__atomic_load_n(&vblank_pending, __ATOMIC_RELAXED) < 4) {
+            pthread_mutex_lock(&vblank_cv_lock);
             __atomic_fetch_add(&vblank_pending, 1, __ATOMIC_RELAXED);
-        else
+            pthread_cond_broadcast(&vblank_cv);
+            pthread_mutex_unlock(&vblank_cv_lock);
+        } else {
             __atomic_fetch_add(&vblank_missed, 1, __ATOMIC_RELAXED);
+        }
         __atomic_fetch_add(&vblank_generated, 1, __ATOMIC_RELAXED);
         now = __atomic_load_n(&vblank_delivered, __ATOMIC_RELAXED);
         if (now != last_seen) {
@@ -1286,8 +1294,23 @@ void ps2_kernel_vblank(ps2_ctx *ctx) {
 void ps2_kernel_poll_vblank(void) {
     int self = self_tid;
     if (in_intr) return;
-    if (!__atomic_load_n(&vblank_pending, __ATOMIC_RELAXED)) return;
     if (self < 0) return;
+
+    if (!__atomic_load_n(&vblank_pending, __ATOMIC_RELAXED)) {
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_nsec += 2000000;
+        if (ts.tv_nsec >= 1000000000) { ts.tv_sec++; ts.tv_nsec -= 1000000000; }
+
+        pthread_mutex_lock(&vblank_cv_lock);
+        if (!__atomic_load_n(&vblank_pending, __ATOMIC_RELAXED))
+            pthread_cond_timedwait(&vblank_cv, &vblank_cv_lock, &ts);
+        pthread_mutex_unlock(&vblank_cv_lock);
+
+        if (!__atomic_load_n(&vblank_pending, __ATOMIC_RELAXED))
+            return;
+    }
+
     pthread_mutex_lock(&ee_lock);
     run_pending_vblanks(self);
     pthread_mutex_unlock(&ee_lock);

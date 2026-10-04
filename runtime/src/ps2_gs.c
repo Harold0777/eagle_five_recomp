@@ -1,3 +1,4 @@
+/* Modified 2026 by Haroldo: Linux performance work (see git log). Original code under Apache-2.0, see LICENSE. */
 #include "ps2_runtime.h"
 extern int ps2_gif_path;
 #include "ps2_vk.h"
@@ -1273,6 +1274,22 @@ static u32 psm_upload_bits(u32 psm) {
     }
 }
 
+static int uprec_cand;
+static u64 dg_xfers, dg_same, dg_inval;
+static int xfer_same;
+static u64 trx_skipped_bytes, trx_total_bytes;
+static int trx_noskip = -1;
+static void trx_skip_report(void) {
+    fprintf(stderr, "trx: %llu of %llu upload bytes skipped as unchanged (%.1f%%)",
+            (unsigned long long)trx_skipped_bytes,
+            (unsigned long long)trx_total_bytes,
+            trx_total_bytes ? 100.0 * (double)trx_skipped_bytes
+                              / (double)trx_total_bytes : 0.0);
+    fputc(10, stderr);
+    fprintf(stderr, "diag: %llu uploads, %llu fully identical, %llu texcache invalidations by epoch", (unsigned long long)dg_xfers, (unsigned long long)dg_same, (unsigned long long)dg_inval);
+    fputc(10, stderr);
+}
+
 static void uprec_begin(u32 dbp, u32 dbw, u32 dpsm, u32 x, u32 y, u32 w, u32 h) {
     u32 bits = psm_upload_bits(dpsm), i, slot = UPREC_N;
     uprec_cur = -1;
@@ -1287,6 +1304,8 @@ static void uprec_begin(u32 dbp, u32 dbw, u32 dpsm, u32 x, u32 y, u32 w, u32 h) 
         if (r->dbp == dbp && r->dbw == dbw && r->dpsm == dpsm && r->x == x && r->y == y
             && r->w == w && r->h == h) { slot = (u32)k; break; }
     }
+    uprec_cand = (slot != UPREC_N && uprecs[slot].valid && !uprecs[slot].lost);
+    xfer_same = uprec_cand; dg_xfers++;
     if (slot == UPREC_N) {
         if (uprec_n < UPREC_N) {
             slot = uprec_n++;
@@ -1329,6 +1348,7 @@ static void uprec_feed(u64 qw) {
     uprec *r = &uprecs[uprec_cur];
     u32 n = r->need - r->pos;
     if (n > 8u) n = 8u;
+    xfer_same = 0;
     memcpy(r->bytes + r->pos, &qw, n);
     r->pos += n;
 }
@@ -1338,6 +1358,7 @@ static void uprec_finish(void) {
     uprec_cur = -1;
     blk_marking = 0xFFFFFFFFu;
     if (r->pos < r->need) return;
+    if (xfer_same) dg_same++;
     r->hashed = 0;
     r->epoch = gs_epoch_seq;
     r->valid = 1;
@@ -1584,6 +1605,135 @@ static void trx_data_inner(u64 qw) {
     if (uprec_cur >= 0 && !trx_left) uprec_finish();
 }
 
+static void trx_stream_slow(const u8 *src, u32 qwc) {
+    for (u32 i = 0; i < qwc; i++) {
+        u64 w[2];
+        memcpy(w, src + (size_t)i * 16u, sizeof w);
+        gs_reg[GS_HWREG] = w[1];
+        trx_data_inner(w[0]);
+        trx_data_inner(w[1]);
+    }
+}
+
+static inline u32 trx_px_at(const u8 *src, u64 j, u32 sh) {
+    u32 v;
+    switch (sh) {
+    case 32: memcpy(&v, src + j * 4u, 4); return v;
+    case 16: { u16 h; memcpy(&h, src + j * 2u, 2); return h; }
+    case 8:  return src[j];
+    default: return (src[j >> 1] >> ((j & 1u) * 4u)) & 0xFu;
+    }
+}
+
+static void trx_data_bulk(const u8 *src, u32 qwc) {
+    static int forced_slow = -1;
+    if (forced_slow < 0) forced_slow = getenv("PS2_TRX_SLOW") != NULL;
+    if (!qwc) return;
+    if (forced_slow
+        || (trxc_cur >= 0 && trxc[trxc_cur].got < 4)) {
+        trx_stream_slow(src, qwc); return;
+    }
+    if (gs_reg[GS_BITBLTBUF] != trx_bb_seen
+        || gs_reg[GS_TRXREG] != trx_rg_seen
+        || gs_reg[GS_TRXPOS] != trx_pos_seen)
+        trx_geom_sync();
+    if (!vram_watch_ready) vram_watch_init();
+    const u32 n = trx_npix;
+    if (vram_watch != 0xFFFFFFFFu || PS2_ENV("PS2_TRACE_MPEG")
+        || !gs_vram || !trx_rrw
+        || (n != 2 && n != 4 && n != 8 && n != 16)) {
+        trx_stream_slow(src, qwc); return;
+    }
+
+    int skip = 0;
+    if (uprec_cur >= 0) {   /* uprec_bulk_fed */
+        uprec *ur = &uprecs[uprec_cur];
+        u64 want = (u64)qwc * 16u;
+        u32 room = ur->need - ur->pos;
+        u32 nb = want < room ? (u32)want : room;
+        if (trx_noskip < 0) {
+            trx_noskip = getenv("PS2_TRX_NOSKIP") != NULL;
+            atexit(trx_skip_report);
+        }
+        trx_total_bytes += nb;
+        if (uprec_cand && !trx_noskip && nb
+            && memcmp(ur->bytes + ur->pos, src, nb) == 0) {
+            skip = 1;
+            trx_skipped_bytes += nb;
+        } else {
+            xfer_same = 0;
+            memcpy(ur->bytes + ur->pos, src, nb);
+        }
+        ur->pos += nb;
+    }
+
+    u64 hi_last;
+    memcpy(&hi_last, src + (size_t)(qwc - 1u) * 16u + 8u, 8);
+    gs_reg[GS_HWREG] = hi_last;
+
+    const u32 dbp = trx_dbp, dpsm = trx_dpsm;
+    u32 dbw = trx_dbw; if (!dbw) dbw = 64u;
+    const u32 rrw = trx_rrw, bits = trx_g.bits;
+    const u32 xend = trx_sax + rrw;
+    const u32 sh = (n == 2) ? 32u : (n == 8) ? 8u : (n == 16) ? 4u : 16u;
+    const u64 total = (u64)qwc * 2u * n;
+    u64 j = 0;
+    u32 wrote = 0;
+    const int fast32 = (sh == 32u && bits == 32u
+                        && dpsm != PSM_T8H && dpsm != PSM_T4HL
+                        && dpsm != PSM_T4HH && dpsm != PSM_CT24
+                        && dpsm != PSM_Z24);
+    const int fast16 = (sh == 16u && bits == 16u);
+
+    while (j < total && trx_left) {
+        const u32 xb = trx_x & trx_g.bwmask;
+        const u16 *off_row = trx_g.off + ((trx_y & trx_g.bhmask) << trx_g.bwsh);
+        const u64 blkbit = vram_bit_g(&trx_g, dbp, trx_ppr, trx_x, trx_y)
+                         - off_row[xb];
+        u32 run = trx_g.bw - xb, k;
+        if (trx_x < xend && run > xend - trx_x) run = xend - trx_x;
+        if (run > total - j) run = (u32)(total - j);
+        if (run > trx_left) run = trx_left;
+        if (!run) break;
+
+        if (skip) {
+        } else if (dpsm == PSM_T8 && sh == 8u) {
+            const u32 base = (u32)(blkbit >> 3);
+            if (base <= GS_VRAM_SIZE - 256u) {
+                u8 *block = gs_vram + base;
+                for (k = 0; k < run; k++)
+                    block[off_row[xb + k] >> 3] = src[j + k];
+            }
+        } else if (fast32 && (u32)(blkbit >> 3) <= GS_VRAM_SIZE - 256u) {
+            u8 *block = gs_vram + (u32)(blkbit >> 3);
+            const u8 *sp = src + j * 4u;
+            for (k = 0; k < run; k++)
+                memcpy(block + (off_row[xb + k] >> 3), sp + (size_t)k * 4u, 4);
+        } else if (fast16 && (u32)(blkbit >> 3) <= GS_VRAM_SIZE - 256u) {
+            u8 *block = gs_vram + (u32)(blkbit >> 3);
+            const u8 *sp = src + j * 2u;
+            for (k = 0; k < run; k++)
+                memcpy(block + (off_row[xb + k] >> 3), sp + (size_t)k * 2u, 2);
+        } else {
+            for (k = 0; k < run; k++) {
+                u64 bit = blkbit + off_row[xb + k];
+                vram_store_b((u32)(bit >> 3), bit, dpsm, bits,
+                             trx_px_at(src, j + k, sh));
+            }
+        }
+        gs_stat_trxpix += run;
+        trx_x += run; trx_left -= run; j += run;
+        if (trx_x >= xend) { trx_x = trx_sax; trx_y++; }
+        wrote = 1;
+    }
+    if (wrote && !trx_left)
+        gs_dirty_rect(dbp, dbw, dpsm,
+                      (u32)((gs_reg[GS_TRXPOS] >> 32) & 0x7FFull),
+                      (u32)((gs_reg[GS_TRXPOS] >> 48) & 0x7FFull),
+                      rrw, (u32)((gs_reg[GS_TRXREG] >> 32) & 0xFFFull));
+    if (uprec_cur >= 0 && !trx_left) uprec_finish();
+}
+
 static u32 clut_entry_at(u32 cbp, u32 cpsm, u32 csm, u32 csa, u32 psm, u32 idx);
 static u32 clut_entry(u32 idx) {
     u64 t0 = tex0_reg();
@@ -1737,6 +1887,13 @@ static struct { u32 tbp, tbw, psm, tw, th, cbp, amax_min, amax_max, nz_max; u64 
 static unsigned texc_n;
 
 void ps2_gs_tex_cache_report(void) {
+    /* diag-report */
+    { extern void ps2_vk_tex_stats(unsigned long long *, unsigned long long *, unsigned long long *);
+      unsigned long long d, sp, nw; ps2_vk_tex_stats(&d, &sp, &nw);
+      ps2_log("vk-tex: %llu dedup hits, %llu slot reuses (changed), %llu new", d, sp, nw); }
+    ps2_log("diag: %llu uploads, %llu fully identical, %llu texcache invalidations by epoch", (unsigned long long)dg_xfers, (unsigned long long)dg_same, (unsigned long long)dg_inval);
+    ps2_log("trx: %llu of %llu upload bytes skipped as unchanged", (unsigned long long)trx_skipped_bytes, (unsigned long long)trx_total_bytes);
+
     u64 tot = texcache_hits + texcache_misses;
     ps2_log("GS texture cache: %llu hits, %llu decodes (%.1f%% hit)%s",
             (unsigned long long)texcache_hits,
@@ -1925,7 +2082,13 @@ static int texcache_find(u64 t0, u64 clut, u32 lod, u32 *idx,
                              texcache[s].tlo, texcache[s].thi);
             { u32 c = gs_range_epoch(texcache[s].clo, texcache[s].chi);
               if (c > e) e = c; }
-            if (e > texcache[s].epoch) continue;
+            if (e > texcache[s].epoch) {   /* stale-drop */
+                dg_inval++;
+                texmembers[bucket][s / 64u] &= ~((u64)1 << (s & 63u));
+                texcache[s].used = 0;
+                if (texidx[bucket] == (u16)(s + 1u)) texidx[bucket] = 0;
+                continue;
+            }
             texcache[s].checked_seq = gs_validation_seq;
         }
         if (texcache[s].index != 0xFFFFFFFFu
@@ -4051,17 +4214,10 @@ void ps2_gs_hwreg_pair(u64 lo, u64 hi) {
 }
 
 void ps2_gs_hwreg_stream(const void *data, u32 qwc) {
-    const u8 *src = (const u8 *)data;
     gs_stat_regs += (u64)qwc * 2u;
     gs_reg_hist[GS_HWREG] += (u64)qwc * 2u;
     PS2_PHASE_BEGIN(PS2_PH_TRX);
-    for (u32 i = 0; i < qwc; i++) {
-        u64 words[2];
-        memcpy(words, src + (size_t)i * 16u, sizeof(words));
-        gs_reg[GS_HWREG] = words[1];
-        trx_data_inner(words[0]);
-        trx_data_inner(words[1]);
-    }
+    trx_data_bulk((const u8 *)data, qwc);
     PS2_PHASE_END(PS2_PH_TRX);
 }
 

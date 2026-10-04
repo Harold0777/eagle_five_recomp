@@ -1,3 +1,4 @@
+/* Modified 2026 by Haroldo: Linux performance work (see git log). Original code under Apache-2.0, see LICENSE. */
 #include "ps2_runtime.h"
 #include "ps2_hle.h"
 #include "ps2_statecap.h"
@@ -1114,7 +1115,14 @@ static int create_swapchain(void) {
     }
     if (swap_extent.width == 0 || swap_extent.height == 0) return 1;
 
-    VKCHK(vkGetPhysicalDeviceSurfaceFormatsKHR(phys, surface, &nf, fmts));
+    {
+        VkResult _r = vkGetPhysicalDeviceSurfaceFormatsKHR(phys, surface, &nf, fmts);
+        if (_r != VK_SUCCESS && _r != VK_INCOMPLETE) {
+            ps2_log("vk: surface formats query failed (%d)", _r);
+            return 1;
+        }
+        if (nf > 64) nf = 64;
+    }
     swap_format = fmts[0].format;
     for (u32 i = 0; i < nf; i++)
         if (fmts[i].format == VK_FORMAT_B8G8R8A8_UNORM) { swap_format = fmts[i].format; break; }
@@ -5152,6 +5160,11 @@ void ps2_vk_texture_size(u32 idx, u32 *w, u32 *h) {
     *h = idx < ntextures ? textures[idx].h : 0u;
 }
 
+static unsigned long long vkt_dedup, vkt_spare, vkt_new;
+void ps2_vk_tex_stats(unsigned long long *d, unsigned long long *s, unsigned long long *n) {
+    *d = vkt_dedup; *s = vkt_spare; *n = vkt_new;
+}
+
 u32 ps2_vk_texture(u64 key, u32 hash, const u8 *rgba, u32 w, u32 h) {
     size_t bytes = (size_t)w * h * 4u;
     u32 i, spare = 0xFFFFFFFFu;
@@ -5160,7 +5173,7 @@ u32 ps2_vk_texture(u64 key, u32 hash, const u8 *rgba, u32 w, u32 h) {
         i = (u32)c;
         if (textures[i].key != key || textures[i].w != w || textures[i].h != h)
             continue;
-        if (textures[i].hash == hash) {
+        if (textures[i].hash == hash) { vkt_dedup++;
             textures[i].rec_seq = tex_rec_seq;
             return i;
         }
@@ -5169,7 +5182,7 @@ u32 ps2_vk_texture(u64 key, u32 hash, const u8 *rgba, u32 w, u32 h) {
             spare = i;
     }
     if (spare != 0xFFFFFFFFu) {
-        i = spare;
+        i = spare; vkt_spare++;
         memcpy(textures[i].rgba_alt, rgba, bytes);
         {   u8 *now_live = textures[i].rgba_alt;
             textures[i].rgba_alt = textures[i].rgba;
@@ -5193,7 +5206,7 @@ u32 ps2_vk_texture(u64 key, u32 hash, const u8 *rgba, u32 w, u32 h) {
         }
         return 0xFFFFFFFFu;
     }
-    i = ntextures++;
+    i = ntextures++; vkt_new++;
     textures[i].key = key;
     textures[i].hash = hash;
     textures[i].w = w;
