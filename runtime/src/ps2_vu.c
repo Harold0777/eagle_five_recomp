@@ -1712,8 +1712,41 @@ static int vif_v3_zero_w(const ps2_vif *v) {
 static void vif_unpack_drain(ps2_vif *v, ps2_vu *vu) {
     u32 cbits = (v->unpack_vl == 3u) ? 16u : (32u >> v->unpack_vl);
     u32 need = (v->unpack_vl == 3u) ? 1u : (v->unpack_vn + 1u);
+    u32 total_bits = need * cbits;
+    u32 required_bits = total_bits;
+    if (need == 3u && !vif_v3_zero_w(v)) required_bits += cbits;
+
     while (v->unpack_num) {
-        if (v->elem_n == 0 && vif_unpack_is_fill(v)) { vif_unpack_fill(v, vu); continue; }
+        if (v->elem_n == 0) {
+            if (vif_unpack_is_fill(v)) { vif_unpack_fill(v, vu); continue; }
+
+            if (v->nbits >= required_bits) {
+                v->elem[0] = (u32)v->bits;
+                if (cbits == 8) {
+                    if (need > 1) v->elem[1] = (u32)(v->bits >> 8);
+                    if (need > 2) v->elem[2] = (u32)(v->bits >> 16);
+                    if (need > 3) v->elem[3] = (u32)(v->bits >> 24);
+                } else if (cbits == 16) {
+                    if (need > 1) v->elem[1] = (u32)(v->bits >> 16);
+                    if (need > 2) v->elem[2] = (u32)(v->bits >> 32);
+                    if (need > 3) v->elem[3] = (u32)(v->bits >> 48);
+                } else {
+                    if (need > 1) v->elem[1] = (u32)(v->bits >> 32);
+                }
+                
+                v->bits = (total_bits >= 64) ? 0 : (v->bits >> (total_bits & 63u));
+                v->nbits -= total_bits;
+                
+                if (need == 3u) {
+                    v->elem[3] = vif_v3_zero_w(v) ? 0u : (u32)v->bits;
+                }
+                
+                vif_unpack_element(v, vu);
+                v->unpack_index++;
+                continue;
+            }
+        }
+
         if (v->elem_n == need) {
             if (need == 3u) {
                 if (!vif_v3_zero_w(v) && v->nbits < cbits) return;
