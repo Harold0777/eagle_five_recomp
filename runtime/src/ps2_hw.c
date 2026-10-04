@@ -696,9 +696,13 @@ static void dma_to_peripheral(int ch, u32 madr, u32 qwc) {
                             lo, hi, madr, qwc);
             }
         }
-        for (u32 i = 0; i < qwc; i++) {
-            memcpy(ps2_spr + ((sadr + i * 16) & (PS2_SPR_SIZE - 16)),
-                   &src[i], 16);
+        u32 bytes = qwc * 16;
+        if (sadr + bytes <= PS2_SPR_SIZE) {
+            memcpy(ps2_spr + sadr, src, bytes);
+        } else {
+            u32 chunk1 = PS2_SPR_SIZE - sadr;
+            memcpy(ps2_spr + sadr, src, chunk1);
+            memcpy(ps2_spr, (const u8*)src + chunk1, bytes - chunk1);
         }
         dma[9].sadr = sadr + qwc * 16;
         break;
@@ -721,9 +725,14 @@ static void dma_from_peripheral(int ch, u32 madr, u32 qwc) {
         u8 *dst = dma_host_ptr(madr);
         u32 sadr = dma[8].sadr & (PS2_SPR_SIZE - 1u);
         if (!dst) return;
-        for (u32 i = 0; i < qwc; i++)
-            memcpy(dst + i * 16,
-                   ps2_spr + ((sadr + i * 16) & (PS2_SPR_SIZE - 16)), 16);
+        u32 bytes = qwc * 16;
+        if (sadr + bytes <= PS2_SPR_SIZE) {
+            memcpy(dst, ps2_spr + sadr, bytes);
+        } else {
+            u32 chunk1 = PS2_SPR_SIZE - sadr;
+            memcpy(dst, ps2_spr + sadr, chunk1);
+            memcpy(dst + chunk1, ps2_spr, bytes - chunk1);
+        }
         dma[8].sadr = sadr + qwc * 16;
     }
 }
