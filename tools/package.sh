@@ -66,6 +66,12 @@ for f in README.md LICENSE CHANGELOG.md; do
     [ -f "$ROOT/$f" ] && cp "$ROOT/$f" "$STAGE/"
 done
 
+# Settings default (para o launcher ter opcoes antes do primeiro arranque)
+if [ -f "$ROOT/tools/ac5_settings.default.ini" ]; then
+    cp "$ROOT/tools/ac5_settings.default.ini" "$STAGE/ac5_settings.ini"
+    echo "[+] Settings default copiado"
+fi
+
 # Script de arranque
 cat > "$STAGE/run.sh" <<'EOF2'
 #!/usr/bin/env bash
