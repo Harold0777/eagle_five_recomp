@@ -63,3 +63,18 @@ python -m ps2recomp /path/to/AC5.iso -o generated
 # 2. Configure and build
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
+
+
+## Known issues
+
+### 3x internal resolution artifacts
+
+Setting `internal_resolution = 3` (3x) produces visible artifacts in volumetric
+effects (clouds, smoke, contrails). This is caused by the bicubic sampling path
+in `gs.frag` using non-power-of-2 weights (1/3, 2/3) that accumulate rounding
+errors across overlapping sprites.
+
+**Workaround:** use 2x or 4x internal resolution. Both work correctly and 4x
+provides higher image quality than 3x anyway.
+
+The High preset uses 4x. No fix is currently planned for 3x.
