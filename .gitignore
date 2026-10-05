@@ -57,3 +57,6 @@ venv/
 .vscode/
 .idea/
 *.swp
+
+# Release output
+dist/
