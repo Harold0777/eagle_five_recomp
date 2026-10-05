@@ -856,6 +856,35 @@ void draw_menu() {
 
 }
 
+// Vulkan function loader for Dear ImGui with KHR<->core aliasing.
+// On Vulkan 1.3+ GPUs the KHR names were promoted to core, so the driver
+// may only expose vkCmdBeginRendering (without the KHR suffix). ImGui
+// requests the KHR names first; this loader resolves both.
+struct ImguiVkLoaderCtx { VkInstance inst; VkDevice dev; };
+
+static PFN_vkVoidFunction imgui_vk_loader(const char* name, void* ud) {
+    ImguiVkLoaderCtx* c = (ImguiVkLoaderCtx*)ud;
+    static const struct { const char* khr; const char* core; } al[] = {
+        {"vkCmdBeginRenderingKHR",   "vkCmdBeginRendering"},
+        {"vkCmdEndRenderingKHR",     "vkCmdEndRendering"},
+        {"vkCmdPipelineBarrier2KHR", "vkCmdPipelineBarrier2"},
+        {"vkCmdWriteTimestamp2KHR",  "vkCmdWriteTimestamp2"},
+        {"vkQueueSubmit2KHR",        "vkQueueSubmit2"},
+    };
+    for (unsigned i = 0; i < sizeof(al)/sizeof(al[0]); i++) {
+        if (strcmp(name, al[i].khr) == 0) {
+            PFN_vkVoidFunction f = vkGetDeviceProcAddr(c->dev, al[i].core);
+            if (!f) f = vkGetDeviceProcAddr(c->dev, al[i].khr);
+            if (!f) f = vkGetInstanceProcAddr(c->inst, al[i].core);
+            if (!f) f = vkGetInstanceProcAddr(c->inst, al[i].khr);
+            return f;
+        }
+    }
+    PFN_vkVoidFunction f = vkGetDeviceProcAddr(c->dev, name);
+    if (!f) f = vkGetInstanceProcAddr(c->inst, name);
+    return f;
+}
+
 int ps2_ui_init(const ps2_ui_init_info *info) {
     if (g_init) return 0;
     if (!info || !info->window) return -1;
@@ -895,6 +924,10 @@ int ps2_ui_init(const ps2_ui_init_info *info) {
     vi.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
     vi.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &g_color_format;
     vi.CheckVkResultFn = check_vk;
+    static ImguiVkLoaderCtx imgui_loader_ctx = {};
+    imgui_loader_ctx.inst = info->instance;
+    imgui_loader_ctx.dev  = info->device;
+    ImGui_ImplVulkan_LoadFunctions(VK_API_VERSION_1_3, imgui_vk_loader, &imgui_loader_ctx);
     if (!ImGui_ImplVulkan_Init(&vi)) {
         ps2_log("ui: the Dear ImGui Vulkan backend did not initialise");
         ImGui_ImplSDL3_Shutdown();
