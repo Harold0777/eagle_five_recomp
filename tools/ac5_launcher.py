@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""Launcher (Qt6) do Ace Combat 5 Static Recompilation.
+"""Launcher (Qt6) do Ace Combat 5 Static Recompilation - EAGLE FIVE.
 
-- Escolhe a ISO e verifica (via SYSTEM.CNF) se e o Ace Combat 5 (USA).
-- Edita as configuracoes graficas do ac5_settings.ini.
-- Lanca o jogo com os argumentos certos.
-
-Colocar em <projeto>/tools/ac5_launcher.py e correr: python3 tools/ac5_launcher.py
-Requer Qt6 para Python:  sudo pacman -S pyside6   (ou: python-pyqt6)
+- Escolhe a ISO e verifica (via SYSTEM.CNF) se é o Ace Combat 5 (USA).
+- Edita as configurações gráficas do ac5_settings.ini.
+- Gestão de cartões de memória (saves) e backups.
+- Lança o jogo com os argumentos corretos e consola integrada.
 """
 import html
 import json
 import math
 import os
 import re
+import shlex
+import shutil
+import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
-
 
 try:
     from PySide6 import QtCore, QtGui, QtWidgets as W
@@ -25,7 +26,7 @@ except ImportError:
     except ImportError:
         QtCore = QtGui = W = None
 Qt = QtCore.Qt if QtCore else None
-if W is None:  # sem Qt: permite importar o modulo (ex.: --selftest)
+if W is None:
     class W:  # noqa
         QCheckBox = QMainWindow = QWidget = QFrame = QPushButton = object
 
@@ -36,7 +37,6 @@ IS_MAC = sys.platform == "darwin"
 IS_LINUX = not (IS_WIN or IS_MAC)
 PLAT_DIR = "windows" if IS_WIN else "macos" if IS_MAC else "linux"
 EXE_NAME = "ac5.exe" if IS_WIN else "ac5"
-# Empacotado (PyInstaller): o launcher fica ao lado do jogo; em dev: <projeto>/tools/
 ROOT = (Path(sys.executable).parent if getattr(sys, "frozen", False)
         else Path(__file__).resolve().parent.parent)
 
@@ -52,11 +52,10 @@ def config_dir():
 
 
 CFG_FILE = config_dir() / "config.json"
-OLD_CFG = Path.home() / ".config" / "ac5-launcher.json"  # versao anterior
+OLD_CFG = Path.home() / ".config" / "ac5-launcher.json"
 
 
 def find_exe():
-    """Procura o executavel ao lado do launcher e em build/<plataforma>."""
     cands = [ROOT, ROOT / "build" / PLAT_DIR]
     if (ROOT / "build").is_dir():
         cands += sorted(p for p in (ROOT / "build").iterdir() if p.is_dir())
@@ -65,67 +64,67 @@ def find_exe():
             return d / EXE_NAME
     return ROOT / "build" / PLAT_DIR / EXE_NAME
 
-GFX_HINTS = ("fxaa", "sharp", "filter", "aniso", "deinterlace", "bright",
-             "contrast", "gamma", "satur", "scale", "res", "vsync",
-             "fullscreen", "msaa", "fsr", "aspect", "window", "present")
-
 
 # ---------------------------------------------------------------------------
-# Verificacao da ISO (ISO9660, setores de 2048 bytes)
+# Verificação da ISO (ISO9660, setores de 2048 bytes)
 # ---------------------------------------------------------------------------
 def _read_root_file(f, name_wanted):
     f.seek(16 * SECTOR)
     pvd = f.read(SECTOR)
-    if pvd[1:6] != b"CD001":
-        raise ValueError("Nao e uma ISO9660 valida (sem descritor CD001).")
+    if len(pvd) < SECTOR or pvd[1:6] != b"CD001":
+        raise ValueError("Não é uma ISO9660 válida (sem descritor CD001).")
     root = pvd[156:190]
     lba = int.from_bytes(root[2:6], "little")
     size = int.from_bytes(root[10:14], "little")
+    if not 0 < size <= 1 << 20:
+        raise ValueError("Diretório raiz da ISO inválido.")
     f.seek(lba * SECTOR)
     data = f.read(size)
     off = 0
-    while off < len(data):
+    while off + 33 <= len(data):
         rec_len = data[off]
-        if rec_len == 0:  # padding ate ao proximo setor
+        if rec_len == 0:  # fim do setor: salta para o próximo
             off = (off // SECTOR + 1) * SECTOR
             continue
         name_len = data[off + 32]
         name = data[off + 33:off + 33 + name_len].decode("ascii", "replace")
-        name = name.split(";")[0].upper()
-        if name == name_wanted:
+        if name.split(";")[0].upper() == name_wanted:
             f_lba = int.from_bytes(data[off + 2:off + 6], "little")
             f_size = int.from_bytes(data[off + 10:off + 14], "little")
             f.seek(f_lba * SECTOR)
             return f.read(min(f_size, 4096))
         off += rec_len
-    raise ValueError("%s nao encontrado na raiz da ISO." % name_wanted)
+    raise ValueError("%s não encontrado na raiz da ISO." % name_wanted)
+
+
+BOOT2 = re.compile(r"BOOT2\s*=\s*cdrom0:\\?([A-Z]{4})[_-](\d{3})[._]?(\d{2})", re.I)
 
 
 def verify_iso(path):
-    """Devolve (estado, serial, mensagem). estado: 'ok' | 'wrong' | 'invalid'."""
     try:
         with open(path, "rb") as f:
             cnf = _read_root_file(f, "SYSTEM.CNF").decode("ascii", "replace")
-    except (OSError, ValueError) as e:
-        return "invalid", None, str(e)
-    m = re.search(r"BOOT2\s*=\s*cdrom0:\\?([A-Z]{4})[_-](\d{3})[._]?(\d{2})", cnf)
+    except (OSError, ValueError, IndexError) as e:
+        return "invalid", None, str(e) or "Falha ao ler a ISO."
+    m = BOOT2.search(cnf)
     if not m:
-        return "invalid", None, "SYSTEM.CNF sem linha BOOT2 reconhecivel."
-    serial = "%s_%s.%s" % m.groups()
+        return "invalid", None, "SYSTEM.CNF sem linha BOOT2 reconhecível."
+    serial = "%s_%s.%s" % tuple(g.upper() for g in m.groups())
     if serial == EXPECTED_SERIAL:
         return "ok", serial, "ISO correta: Ace Combat 5 (USA) [%s]" % serial
-    return "wrong", serial, ("ISO de outro jogo ou regiao: %s "
+    return "wrong", serial, ("ISO de outro jogo ou região: %s "
                              "(esperado %s)" % (serial, EXPECTED_SERIAL))
 
 
 # ---------------------------------------------------------------------------
-# Ficheiro .ini (preserva comentarios e ordem das linhas)
+# Ficheiro .ini
 # ---------------------------------------------------------------------------
 KV = re.compile(r"^(\s*)([A-Za-z0-9_.\-]+)(\s*[=:]\s*)(.*?)((?:\s+[;#].*)?\s*)$")
 
 
 def load_ini(path):
-    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    text = path.read_bytes().decode("utf-8-sig", errors="replace")
+    lines = text.splitlines()
     entries, section = [], ""
     for i, line in enumerate(lines):
         s = line.strip()
@@ -141,36 +140,58 @@ def load_ini(path):
 
 
 def save_ini(path, lines, changes):
+    """Grava só as linhas alteradas, mantendo comentários e fim de linha,
+    e de forma atómica (ficheiro temporário + replace)."""
     bak = path.with_name(path.name + ".launcher.bak")
     if not bak.exists():
-        bak.write_text(path.read_text(encoding="utf-8", errors="replace"),
-                       encoding="utf-8")
+        shutil.copy2(path, bak)
+    eol = "\r\n" if b"\r\n" in path.read_bytes() else "\n"
     for idx, value in changes.items():
         m = KV.match(lines[idx])
-        lines[idx] = "%s%s%s%s%s" % (m.group(1), m.group(2), m.group(3),
-                                      value, m.group(5))
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        if m:
+            lines[idx] = "%s%s%s%s%s" % (m.group(1), m.group(2), m.group(3),
+                                          value, m.group(5))
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8", newline="") as f:
+        f.write(eol.join(lines) + eol)
+    os.replace(tmp, path)
 
 
 def load_cfg():
-    try:
-        return json.loads((CFG_FILE if CFG_FILE.exists() else OLD_CFG).read_text())
-    except (OSError, ValueError):
-        return {}
+    for p in (CFG_FILE, OLD_CFG):
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+    return {}
 
 
 def save_cfg(cfg):
-    CFG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    CFG_FILE.write_text(json.dumps(cfg, indent=2))
+    try:
+        CFG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = CFG_FILE.with_name(CFG_FILE.name + ".tmp")
+        tmp.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+        os.replace(tmp, CFG_FILE)
+    except OSError:
+        pass
 
 
 # ---------------------------------------------------------------------------
-# Interface Qt6  -  identidade "EAGLE FIVE" (HUD de cockpit, desenhada em codigo)
+# Interface Qt6 - EAGLE FIVE HUD Theme
 # ---------------------------------------------------------------------------
 SECTION_TITLES = {"graphics": "Imagem", "postfx": "Pós-processamento",
                   "display": "Janela e ecrã"}
 GFX_SECTIONS = ("graphics", "postfx", "display")
-CURATED = {  # (secção, chave) -> (tipo, rótulo, extras)
+ANISO = [("Desligado", "1"), ("2x", "2"), ("4x", "4"), ("8x", "8"), ("16x", "16")]
+BOOL_STYLES = [("1", "0"), ("true", "false"), ("yes", "no"), ("on", "off")]
+# Presets só mexem na secção [postfx]; são carregados nos controlos e
+# só vão para o .ini quando carregas em GUARDAR (ou DECOLAR).
+PRESETS = {
+    "original": {"fxaa": 0, "sharpen": 0.0, "saturation": 1.0, "contrast": 1.0},
+    "cinematic": {"fxaa": 1, "sharpen": 0.55, "saturation": 1.10, "contrast": 1.05},
+    "sharp": {"fxaa": 1, "sharpen": 0.85, "saturation": 1.0},
+}
+CURATED = {
     ("postfx", "fxaa"): ("check", "Anti-aliasing FXAA"),
     ("postfx", "sharpen"): ("slider", "Nitidez", 0.0, 1.0),
     ("postfx", "brightness"): ("slider", "Brilho", -0.5, 0.5),
@@ -178,7 +199,16 @@ CURATED = {  # (secção, chave) -> (tipo, rótulo, extras)
     ("postfx", "gamma"): ("slider", "Gama", 0.5, 2.0),
     ("postfx", "saturation"): ("slider", "Saturação", 0.0, 2.0),
     ("graphics", "scale_filter"): ("combo", "Filtro de escala", [
-        "Pixelado (nearest)", "Bilinear", "Bilinear nítido"]),
+        ("Pixelado (nearest)", "0"), ("Bilinear", "1"), ("Bilinear nítido", "2")]),
+    ("graphics", "aniso"): ("combo", "Filtragem Anisotrópica", ANISO),
+    ("graphics", "anisotropy"): ("combo", "Filtragem Anisotrópica", ANISO),
+    ("graphics", "msaa"): ("combo", "MSAA", [
+        ("Desligado", "1"), ("2x", "2"), ("4x", "4"), ("8x", "8")]),
+    ("graphics", "widescreen"): ("check", "Correção Widescreen"),
+    ("display", "borderless"): ("check", "Janela Sem Bordas"),
+    ("display", "present"): ("combo", "Modo de Apresentação (Vsync)", [
+        ("Mailbox (Adaptativo)", "mailbox"), ("FIFO (Rígido)", "fifo"), ("Immediate (Sem Vsync)", "immediate")]),
+    ("graphics", "deinterlace"): ("check", "Desentrelaçamento"),
 }
 
 PAL = {"@BG": "#0a0e13", "@LINE": "#1d2a38", "@TEXT": "#dfe8f1",
@@ -227,7 +257,6 @@ for _k, _v in PAL.items():
 
 
 def draw_emblem(p, size):
-    """Emblema original: hexágono (radar) + asa delta. Usado no logo e no ícone."""
     P, C = QtCore.QPointF, QtGui.QColor
     p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
     p.save()
@@ -258,7 +287,6 @@ class Emblem(W.QWidget):
 
 
 class HudBg(W.QWidget):
-    """Fundo: grelha tática ténue + arcos de radar."""
     def paintEvent(self, _):
         p = QtGui.QPainter(self)
         p.fillRect(self.rect(), QtGui.QColor(PAL["@BG"]))
@@ -279,7 +307,6 @@ class HudBg(W.QWidget):
 
 
 class HudCard(W.QFrame):
-    """Cartão com marcas de canto estilo mira/HUD."""
     def __init__(self):
         super().__init__()
         self.setObjectName("card")
@@ -296,7 +323,6 @@ class HudCard(W.QFrame):
 
 
 class HudButton(W.QPushButton):
-    """Botão principal com cantos cortados. running=True -> modo ABORTAR."""
     def __init__(self, text):
         super().__init__(text)
         self.running = False
@@ -401,11 +427,19 @@ def header(tag, title):
     return box
 
 
+class Field:
+    """Uma opção do .ini ligada ao seu controlo."""
+    __slots__ = ("sec", "key", "get", "set", "orig")
+
+    def __init__(self, sec, key, get, set_, orig):
+        self.sec, self.key, self.get, self.set, self.orig = sec, key, get, set_, orig
+
+
 class Launcher(W.QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("EAGLE FIVE  -  Ace Combat 5 Launcher")
-        self.resize(1040, 680)
+        self.setWindowTitle("EAGLE FIVE - Ace Combat 5 Launcher")
+        self.resize(1080, 700)
         self.setAcceptDrops(True)
         pm = QtGui.QPixmap(128, 128)
         pm.fill(Qt.GlobalColor.transparent)
@@ -417,7 +451,7 @@ class Launcher(W.QMainWindow):
         self.cfg = load_cfg()
         self.proc, self.ok = None, False
         self.fields, self.lines, self.hosts = {}, [], {}
-        self.info = lbl("", "muted")
+        self.infos = []  # um rótulo de estado por página de definições
 
         root = HudBg()
         self.setCentralWidget(root)
@@ -470,6 +504,20 @@ class Launcher(W.QMainWindow):
         self.refresh_cmd()
         self.check_iso()
 
+    # ---------------- utilitários ----------------
+    def notify(self, text):
+        for lab in self.infos:
+            lab.setText(text)
+
+    def goto(self, i):
+        self.stack.setCurrentIndex(i)
+        self.navs[i].setChecked(True)
+
+    def persist_cfg(self):
+        save_cfg({"iso": self.iso.text().strip(), "exe": str(self.exe()),
+                  "mango": self.mango.isChecked(), "watchdog_off": self.wd.isChecked(),
+                  "driver": self.drv.currentText(), "data": self.data.text().strip()})
+
     # ---------------- páginas ----------------
     def page_game(self):
         page = W.QWidget()
@@ -482,7 +530,12 @@ class Launcher(W.QMainWindow):
         r = W.QHBoxLayout()
         self.iso = W.QLineEdit(self.cfg.get("iso", ""))
         self.iso.setPlaceholderText("Escolhe ou arrasta a ISO do jogo…")
-        self.iso.textChanged.connect(lambda: self.check_iso())
+        # debounce: não abre a ISO a cada tecla digitada
+        self.iso_timer = QtCore.QTimer(self)
+        self.iso_timer.setSingleShot(True)
+        self.iso_timer.setInterval(250)
+        self.iso_timer.timeout.connect(self.check_iso)
+        self.iso.textChanged.connect(lambda _t: self.iso_timer.start())
         r.addWidget(self.iso, 1)
         r.addWidget(ghost("PROCURAR", self.browse))
         cl.addLayout(r)
@@ -507,7 +560,7 @@ class Launcher(W.QMainWindow):
         rows = [("Executável do jogo", self.exe_edit),
                 ("Pasta de dados (--data)", self.data),
                 ("Desligar watchdog (--watchdog 0)", self.wd)]
-        if IS_LINUX:  # opções que só existem em Linux
+        if IS_LINUX:
             rows += [("MangoHud", self.mango), ("Driver de vídeo SDL", self.drv)]
         for lab, w in rows:
             c2l.addLayout(row(lab, w))
@@ -532,6 +585,16 @@ class Launcher(W.QMainWindow):
         v = W.QVBoxLayout(page)
         v.setContentsMargins(36, 30, 36, 22)
         v.addLayout(header(tag, title))
+
+        if key == "gfx":
+            pbar = W.QHBoxLayout()
+            pbar.addWidget(lbl("PRESET RÁPIDO:", "tag"))
+            pbar.addWidget(ghost("Original", lambda: self.apply_preset("original")))
+            pbar.addWidget(ghost("Cinematográfico", lambda: self.apply_preset("cinematic")))
+            pbar.addWidget(ghost("Nitidez Máxima", lambda: self.apply_preset("sharp")))
+            pbar.addStretch()
+            v.addLayout(pbar)
+
         area = W.QScrollArea()
         area.setWidgetResizable(True)
         inner = W.QWidget()
@@ -541,9 +604,28 @@ class Launcher(W.QMainWindow):
         area.setWidget(inner)
         v.addWidget(area, 1)
         self.hosts[key] = lay
+
+        if key == "adv":
+            sc, scl = card("Gestão de Dados & Pastas")
+            scl.addWidget(lbl("Cópia de segurança e restauro dos cartões de memória "
+                              "(saves/*.ps2mc) e acessos rápidos.", "muted"))
+            r1 = W.QHBoxLayout()
+            r1.addWidget(ghost("FAZER BACKUP DOS SAVES", self.backup_save))
+            r1.addWidget(ghost("RESTAURAR BACKUP", self.restore_save))
+            r1.addStretch()
+            r2 = W.QHBoxLayout()
+            r2.addWidget(ghost("ABRIR SAVES", lambda: self.open_folder("saves")))
+            r2.addWidget(ghost("ABRIR CAPTURAS (OUT)", lambda: self.open_folder("out")))
+            r2.addWidget(ghost("ABRIR PASTA JOGO", lambda: self.open_folder("")))
+            r2.addStretch()
+            scl.addLayout(r1)
+            scl.addLayout(r2)
+            lay.addWidget(sc)
+
         bar = W.QHBoxLayout()
-        if key == "gfx":
-            bar.addWidget(self.info)
+        info = lbl("", "muted")
+        self.infos.append(info)
+        bar.addWidget(info)
         bar.addStretch()
         bar.addWidget(ghost("DESCARTAR", self.build_settings))
         bar.addWidget(ghost("GUARDAR", lambda: self.save_settings()))
@@ -576,8 +658,8 @@ class Launcher(W.QMainWindow):
         urls = e.mimeData().urls()
         if urls:
             self.iso.setText(urls[0].toLocalFile())
-            self.stack.setCurrentIndex(0)
-            self.navs[0].setChecked(True)
+            self.check_iso()
+            self.goto(0)
 
     def browse(self):
         cur = self.iso.text().strip()
@@ -587,12 +669,14 @@ class Launcher(W.QMainWindow):
             "Imagens de disco (*.iso *.ISO);;Todos (*)")
         if p:
             self.iso.setText(p)
+            self.check_iso()
 
     def set_status(self, color, text):
         self.st_title.setText('<span style="color:%s">■</span>&nbsp; %s'
                               % (color, html.escape(text)))
 
     def check_iso(self):
+        self.iso_timer.stop()
         p = self.iso.text().strip()
         self.st_detail.setText("")
         if not p:
@@ -612,19 +696,105 @@ class Launcher(W.QMainWindow):
         self.play_btn.update()
         self.refresh_cmd()
 
+    # ---------------- saves e pastas ----------------
+    def saves_dir(self):
+        return self.exe().parent / "saves"
+
+    def backup_save(self):
+        if self.proc:
+            W.QMessageBox.warning(self, "Aviso", "Fecha o jogo antes de fazer backup dos saves.")
+            return
+        cards = sorted(self.saves_dir().glob("*.ps2mc"))
+        if not cards:
+            W.QMessageBox.warning(self, "Aviso", "Nenhum cartão (*.ps2mc) encontrado na pasta saves/ do jogo.")
+            return
+        backup_dir = ROOT / "backup_saves"
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        try:
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            for c in cards:
+                dest = backup_dir / ("%s_%s.ps2mc" % (c.stem, ts))
+                shutil.copy2(c, dest)
+                self.log.appendPlainText("[save] Backup criado: %s" % dest)
+        except OSError as e:
+            W.QMessageBox.critical(self, "Erro", "Falha no backup:\n%s" % e)
+            return
+        W.QMessageBox.information(self, "Sucesso", "%d cartão(ões) copiado(s) para:\n%s"
+                                  % (len(cards), backup_dir))
+
+    def restore_save(self):
+        if self.proc:
+            W.QMessageBox.warning(self, "Aviso", "Fecha o jogo antes de restaurar saves.")
+            return
+        backup_dir = ROOT / "backup_saves"
+        src, _ = W.QFileDialog.getOpenFileName(
+            self, "Escolher backup para restaurar", str(backup_dir),
+            "Cartão de memória (*.ps2mc)")
+        if not src:
+            return
+        src = Path(src)
+        m = re.match(r"^(.*)_\d{8}_\d{6}$", src.stem)
+        target = self.saves_dir() / ((m.group(1) if m else "card0") + ".ps2mc")
+        if W.QMessageBox.question(
+                self, "Restaurar backup",
+                "Substituir %s por %s?\n\nO ficheiro atual será guardado antes."
+                % (target.name, src.name)) != W.QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.saves_dir().mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                shutil.copy2(target, backup_dir / ("%s_%s_antes-restauro.ps2mc" % (target.stem, ts)))
+            shutil.copy2(src, target)
+        except OSError as e:
+            W.QMessageBox.critical(self, "Erro", "Falha ao restaurar:\n%s" % e)
+            return
+        self.log.appendPlainText("[save] Restaurado %s -> %s" % (src.name, target))
+        self.notify("SAVE RESTAURADO: %s" % target.name)
+
+    def open_folder(self, rel_path):
+        base = self.exe().parent
+        if not base.is_dir():
+            W.QMessageBox.warning(self, "Aviso", "Pasta do jogo não encontrada:\n%s" % base)
+            return
+        p = base / rel_path if rel_path else base
+        p.mkdir(exist_ok=True)
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(p)))
+
     # ---------------- definições ----------------
     def exe(self):
         return Path(self.exe_edit.text().strip())
 
+    def apply_preset(self, name):
+        values = PRESETS[name]
+        n = 0
+        for f in self.fields.values():
+            if f.sec == "postfx" and f.key in values and f.set:
+                f.set(values[f.key])
+                n += 1
+        self.notify(("PRESET '%s' CARREGADO // GUARDA PARA APLICAR" % name.upper()) if n
+                    else "SEM OPÇÕES [postfx] NO .INI (corre o jogo uma vez)")
+
     def build_settings(self):
-        for lay in self.hosts.values():
-            clear(lay)
+        for key, lay in self.hosts.items():
+            if key == "adv":  # preserva o cartão de saves (índice 0)
+                while lay.count() > 1:
+                    it = lay.takeAt(1)
+                    if it.widget():
+                        it.widget().deleteLater()
+            else:
+                clear(lay)
         self.fields.clear()
         ini = self.exe().parent / "ac5_settings.ini"
-        if not ini.exists():
-            self.info.setText("ac5_settings.ini não existe (corre o jogo uma vez).")
+        if not ini.is_file():
+            self.notify("ac5_settings.ini não existe (corre o jogo uma vez).")
             return
-        self.lines, entries = load_ini(ini)
+        try:
+            self.lines, entries = load_ini(ini)
+        except OSError as e:
+            self.notify("Erro a ler o .ini: %s" % e)
+            return
         cards = {}
         for idx, sec, key, val in entries:
             host = "gfx" if sec in GFX_SECTIONS else "adv"
@@ -633,28 +803,36 @@ class Launcher(W.QMainWindow):
                 self.hosts[host].addWidget(c)
                 cards[(host, sec)] = cl
             self.add_field(cards[(host, sec)], sec, key, val, idx)
-        for lay in self.hosts.values():
-            lay.addStretch()
-        self.info.setText("%d OPÇÕES CARREGADAS" % len(self.fields))
+
+        for k in self.hosts:
+            self.hosts[k].addStretch()
+        self.notify("%d OPÇÕES CARREGADAS" % len(self.fields))
 
     def add_field(self, lay, sec, key, val, idx):
         spec = CURATED.get((sec, key))
         kind, label = (spec[0], spec[1]) if spec else ("entry", key)
+        raw = val.strip()
         if kind == "slider":
             try:
-                lo, hi, f = spec[2], spec[3], float(val)
+                lo, hi, f = spec[2], spec[3], float(raw)
             except ValueError:
                 kind = "entry"
+
         if kind == "slider":
-            init = int(max(0, min(1000, round((f - lo) / (hi - lo) * 1000))))
+            def to_pos(x, lo=lo, hi=hi):
+                return int(max(0, min(1000, round((x - lo) / (hi - lo) * 1000))))
+
+            def to_val(p, lo=lo, hi=hi):
+                return lo + p / 1000 * (hi - lo)
+
+            init = to_pos(f)
             s = W.QSlider(Qt.Orientation.Horizontal)
             s.setRange(0, 1000)
             s.setValue(init)
             s.setFixedWidth(260)
-            out = lbl("%.2f" % (lo + s.value() / 1000 * (hi - lo)), "val")
+            out = lbl("%.2f" % to_val(init), "val")
             out.setFixedWidth(46)
-            s.valueChanged.connect(lambda x, o=out, lo=lo, hi=hi:
-                                   o.setText("%.2f" % (lo + x / 1000 * (hi - lo))))
+            s.valueChanged.connect(lambda x, o=out: o.setText("%.2f" % to_val(x)))
             box = W.QHBoxLayout()
             box.addWidget(s)
             box.addWidget(out)
@@ -663,56 +841,90 @@ class Launcher(W.QMainWindow):
             h.addStretch()
             h.addLayout(box)
             lay.addLayout(h)
-            self.fields[idx] = (lambda s=s, init=init, lo=lo, hi=hi, val=val:
-                                val.strip() if s.value() == init
-                                else "%.6f" % (lo + s.value() / 1000 * (hi - lo)), val)
+            self.fields[idx] = Field(
+                sec, key,
+                lambda: raw if s.value() == init else "%.6f" % to_val(s.value()),
+                lambda x: s.setValue(to_pos(float(x))), val)
             return
+
         if kind == "check":
-            w = Switch(val.strip() == "1")
-            getter = lambda w=w: "1" if w.isChecked() else "0"
+            low = raw.lower()
+            style = next((st for st in BOOL_STYLES if low in st), BOOL_STYLES[0])
+            was_on = low == style[0]
+            w = Switch(was_on)
+            get = lambda: (raw if w.isChecked() == was_on
+                           else style[0] if w.isChecked() else style[1])
+            set_ = lambda x: w.setChecked(bool(x))
         elif kind == "combo":
             w = W.QComboBox()
-            w.addItems(spec[2])
-            try:
-                w.setCurrentIndex(int(val))
-                getter = lambda w=w: str(w.currentIndex())
-            except ValueError:
-                getter = lambda val=val: val.strip()
+            for disp, data in spec[2]:
+                w.addItem(disp, data)
+            i = w.findData(raw)
+            if i < 0:
+                # valor fora da lista: mantém-no em vez de o trocar em silêncio
+                w.addItem("Personalizado (%s)" % raw, raw)
+                i = w.count() - 1
+            w.setCurrentIndex(i)
+            get = lambda: str(w.currentData())
+
+            def set_(x, w=w):
+                j = w.findData(str(x))
+                if j >= 0:
+                    w.setCurrentIndex(j)
         else:
             w = W.QLineEdit(val)
             w.setFixedWidth(200)
-            getter = lambda w=w: w.text().strip()
+            get = lambda: w.text().strip()
+            set_ = lambda x: w.setText(str(x))
         lay.addLayout(row(label, w))
-        self.fields[idx] = (getter, val)
+        self.fields[idx] = Field(sec, key, get, set_, val)
 
     def save_settings(self, quiet=False):
-        changes = {i: g() for i, (g, o) in self.fields.items() if g() != o.strip()}
+        changes = {}
+        for i, f in self.fields.items():
+            new = f.get()
+            if new != f.orig.strip():
+                changes[i] = new
         if changes:
-            save_ini(self.exe().parent / "ac5_settings.ini", self.lines, changes)
+            try:
+                save_ini(self.exe().parent / "ac5_settings.ini", self.lines, changes)
+            except OSError as e:
+                W.QMessageBox.critical(self, "Erro", "Não foi possível guardar o .ini:\n%s" % e)
+                return False
         if not quiet:
             self.build_settings()
-            self.info.setText("%d ALTERAÇÃO(ÕES) GUARDADA(S)" % len(changes))
+            self.notify("%d ALTERAÇÃO(ÕES) GUARDADA(S)" % len(changes))
+        return True
 
     # ---------------- lançar ----------------
     def build_cmd(self):
-        cmd = [str(self.exe()), "--data", self.data.text(),
-               "--disc", self.iso.text().strip()]
+        cmd = [str(self.exe())]
+        data = self.data.text().strip()
+        if data:
+            cmd += ["--data", data]
+        cmd += ["--disc", self.iso.text().strip()]
         return cmd + (["--watchdog", "0"] if self.wd.isChecked() else [])
+
+    def extra_env(self):
+        env = {}
+        if IS_LINUX and self.mango.isChecked():
+            env["MANGOHUD"] = "1"
+        if IS_LINUX and self.drv.currentText() != "auto":
+            # SDL2 lê SDL_VIDEODRIVER, SDL3 lê SDL_VIDEO_DRIVER: define ambas
+            env["SDL_VIDEODRIVER"] = env["SDL_VIDEO_DRIVER"] = self.drv.currentText()
+        return env
 
     def refresh_cmd(self):
         if not hasattr(self, "cmd_lbl"):
             return
-        pre = ""
-        if IS_LINUX:
-            pre = ("MANGOHUD=1 " if self.mango.isChecked() else "") + \
-                  ("SDL_VIDEO_DRIVER=%s " % self.drv.currentText()
-                   if self.drv.currentText() != "auto" else "")
-        self.cmd_lbl.setText(pre + " ".join(
-            '"%s"' % c if " " in c else c for c in self.build_cmd()))
+        cmd = self.build_cmd()
+        line = subprocess.list2cmdline(cmd) if IS_WIN else shlex.join(cmd)
+        pre = "".join("%s=%s " % kv for kv in self.extra_env().items())
+        self.cmd_lbl.setText(pre + line)
 
     def play(self):
         if self.proc:
-            self.proc.terminate()
+            self.stop_game()
             return
         if not self.ok:
             return
@@ -720,24 +932,20 @@ class Launcher(W.QMainWindow):
             W.QMessageBox.critical(self, "Erro", "Executável não encontrado:\n%s"
                                    % self.exe())
             return
-        self.save_settings(quiet=True)
-        save_cfg({"iso": self.iso.text(), "exe": str(self.exe()),
-                  "mango": self.mango.isChecked(), "watchdog_off": self.wd.isChecked(),
-                  "driver": self.drv.currentText(), "data": self.data.text()})
+        if not self.save_settings(quiet=True):
+            return
+        self.persist_cfg()
         env = QtCore.QProcessEnvironment.systemEnvironment()
-        if IS_LINUX and self.mango.isChecked():
-            env.insert("MANGOHUD", "1")
-        if IS_LINUX and self.drv.currentText() != "auto":
-            env.insert("SDL_VIDEO_DRIVER", self.drv.currentText())
+        for k, v in self.extra_env().items():
+            env.insert(k, v)
         p = QtCore.QProcess(self)
         p.setProcessEnvironment(env)
         p.setWorkingDirectory(str(ROOT))
         p.setProcessChannelMode(QtCore.QProcess.ProcessChannelMode.MergedChannels)
         p.readyReadStandardOutput.connect(lambda: self.log.appendPlainText(
             bytes(p.readAll()).decode("utf-8", "replace").rstrip()))
-        p.finished.connect(self.on_finished)
-        p.errorOccurred.connect(lambda e: self.log.appendPlainText(
-            "[erro ao iniciar: %s]" % e))
+        p.finished.connect(lambda code, status: self.on_finished(code, status))
+        p.errorOccurred.connect(lambda e: self.on_error(p, e))
         self.log.appendPlainText("$ " + self.cmd_lbl.text())
         self.proc = p
         cmd = self.build_cmd()
@@ -745,15 +953,53 @@ class Launcher(W.QMainWindow):
         self.play_btn.running = True
         self.play_btn.setText("ABORTAR")
         self.play_btn.update()
-        self.stack.setCurrentIndex(3)
-        self.navs[3].setChecked(True)
+        self.goto(3)
 
-    def on_finished(self, code, _status):
-        self.log.appendPlainText("[jogo terminou, código %s]" % code)
+    def stop_game(self):
+        p = self.proc
+        if not p:
+            return
+        p.terminate()
+        # se o jogo ignorar o pedido, força o encerramento
+        def force():
+            try:
+                if p.state() != QtCore.QProcess.ProcessState.NotRunning:
+                    p.kill()
+            except RuntimeError:  # objeto já destruído
+                pass
+        QtCore.QTimer.singleShot(5000, force)
+
+    def on_error(self, p, err):
+        self.log.appendPlainText("[erro do processo: %s]" % err)
+        # se nem arrancou, 'finished' nunca é emitido: repõe a interface aqui
+        if err == QtCore.QProcess.ProcessError.FailedToStart and p is self.proc:
+            self.on_finished(-1, None)
+
+    def on_finished(self, code, status):
+        crashed = status == QtCore.QProcess.ExitStatus.CrashExit
+        self.log.appendPlainText("[jogo terminou, código %s%s]"
+                                 % (code, " — CRASH" if crashed else ""))
+        if self.proc:
+            self.proc.deleteLater()
         self.proc = None
         self.play_btn.running = False
         self.play_btn.setText("DECOLAR")
         self.check_iso()
+
+    def closeEvent(self, e):
+        if self.proc:
+            if W.QMessageBox.question(
+                    self, "Jogo em execução",
+                    "O jogo ainda está a correr. Terminar e sair?"
+            ) != W.QMessageBox.StandardButton.Yes:
+                e.ignore()
+                return
+            self.proc.terminate()
+            if not self.proc.waitForFinished(3000):
+                self.proc.kill()
+                self.proc.waitForFinished(1000)
+        self.persist_cfg()
+        e.accept()
 
 
 def main():
@@ -771,6 +1017,9 @@ def main():
 
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
-        print(verify_iso(sys.argv[sys.argv.index("--selftest") + 1]))
+        i = sys.argv.index("--selftest")
+        if i + 1 >= len(sys.argv):
+            sys.exit("Uso: ac5_launcher.py --selftest caminho/para/jogo.iso")
+        print(verify_iso(sys.argv[i + 1]))
     else:
         main()
