@@ -191,6 +191,51 @@ PRESETS = {
     "cinematic": {"fxaa": 1, "sharpen": 0.55, "saturation": 1.10, "contrast": 1.05},
     "sharp": {"fxaa": 1, "sharpen": 0.85, "saturation": 1.0},
 }
+HW_PRESETS = {
+    "low": {
+        ("graphics", "preset"):              "0",
+        ("graphics", "internal_resolution"): "1",
+        ("graphics", "texture_filter"):      "1",
+        ("graphics", "anisotropy"):          "0",
+        ("graphics", "scale_filter"):        "0",
+        ("graphics", "deinterlace"):         True,
+        ("graphics", "widescreen"):          False,
+        ("postfx",   "fxaa"):                False,
+        ("postfx",   "sharpen"):             0.0,
+        ("postfx",   "saturation"):          1.0,
+        ("postfx",   "contrast"):            1.0,
+        ("display",  "fps_limit"):           "60",
+    },
+    "medium": {
+        ("graphics", "preset"):              "1",
+        ("graphics", "internal_resolution"): "2",
+        ("graphics", "texture_filter"):      "0",
+        ("graphics", "anisotropy"):          "4",
+        ("graphics", "scale_filter"):        "1",
+        ("graphics", "deinterlace"):         True,
+        ("graphics", "widescreen"):          True,
+        ("postfx",   "fxaa"):                True,
+        ("postfx",   "sharpen"):             0.55,
+        ("postfx",   "saturation"):          1.10,
+        ("postfx",   "contrast"):            1.05,
+        ("display",  "fps_limit"):           "0",
+    },
+    "high": {
+        ("graphics", "preset"):              "2",
+        ("graphics", "internal_resolution"): "3",
+        ("graphics", "texture_filter"):      "0",
+        ("graphics", "anisotropy"):          "16",
+        ("graphics", "scale_filter"):        "2",
+        ("graphics", "deinterlace"):         True,
+        ("graphics", "widescreen"):          True,
+        ("postfx",   "fxaa"):                True,
+        ("postfx",   "sharpen"):             0.85,
+        ("postfx",   "saturation"):          1.0,
+        ("postfx",   "contrast"):            1.0,
+        ("display",  "fps_limit"):           "0",
+    },
+}
+
 CURATED = {
     ("postfx", "fxaa"): ("check", "Anti-aliasing FXAA"),
     ("postfx", "sharpen"): ("slider", "Nitidez", 0.0, 1.0),
@@ -587,6 +632,14 @@ class Launcher(W.QMainWindow):
         v.addLayout(header(tag, title))
 
         if key == "gfx":
+            hbar = W.QHBoxLayout()
+            hbar.addWidget(lbl("PRESET DE HARDWARE:", "tag"))
+            hbar.addWidget(ghost("BAIXO",  lambda: self.apply_hw_preset("low")))
+            hbar.addWidget(ghost("MÉDIO",  lambda: self.apply_hw_preset("medium")))
+            hbar.addWidget(ghost("ALTO",   lambda: self.apply_hw_preset("high")))
+            hbar.addStretch()
+            v.addLayout(hbar)
+
             pbar = W.QHBoxLayout()
             pbar.addWidget(lbl("PRESET RÁPIDO:", "tag"))
             pbar.addWidget(ghost("Original", lambda: self.apply_preset("original")))
@@ -775,6 +828,24 @@ class Launcher(W.QMainWindow):
                 n += 1
         self.notify(("PRESET '%s' CARREGADO // GUARDA PARA APLICAR" % name.upper()) if n
                     else "SEM OPÇÕES [postfx] NO .INI (corre o jogo uma vez)")
+
+    def apply_hw_preset(self, name):
+        values = HW_PRESETS.get(name)
+        if not values:
+            return
+        n = 0
+        for f in self.fields.values():
+            key = (f.sec, f.key)
+            if key in values and f.set:
+                try:
+                    f.set(values[key])
+                    n += 1
+                except Exception:
+                    pass
+        if n:
+            self.notify("PRESET HARDWARE '%s' CARREGADO // GUARDA PARA APLICAR" % name.upper())
+        else:
+            self.notify("SEM CHAVES CORRESPONDENTES NO .INI (corre o jogo uma vez)")
 
     def build_settings(self):
         for key, lay in self.hosts.items():
