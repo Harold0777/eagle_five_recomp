@@ -26,7 +26,7 @@ STAGE="$DIST/$NAME"
 echo "[+] Versao: $VERSION"
 echo "[+] Raiz:   $ROOT"
 
-# --- localizar binario (aceita build/linux/ac5 ou build/ac5) ---
+# --- localizar binario ---
 if [ -x "$BUILD/linux/ac5" ]; then
     BIN="$BUILD/linux/ac5"
 elif [ -x "$BUILD/ac5" ]; then
@@ -37,34 +37,41 @@ else
 fi
 
 [ -f "$ROOT/tools/ac5_launcher.py" ] || { echo "[!] Launcher nao encontrado"; exit 1; }
+[ -f "$ROOT/generated/ps2_image.bin" ] || { echo "[!] generated/ps2_image.bin nao encontrado"; exit 1; }
 
 # --- staging ---
 rm -rf "$STAGE"
-mkdir -p "$STAGE/shaders"
+mkdir -p "$STAGE/shaders" "$STAGE/tools" "$STAGE/generated"
 
-# --- binario + launcher ---
+# Binario na raiz (find_exe procura aqui)
 cp "$BIN" "$STAGE/ac5"
-cp "$ROOT/tools/ac5_launcher.py" "$STAGE/"
-chmod +x "$STAGE/ac5" "$STAGE/ac5_launcher.py"
+chmod +x "$STAGE/ac5"
 
-# --- shaders compilados ---
-SHADERS_SRC="$BUILD/shaders"
-if [ -d "$SHADERS_SRC" ]; then
-    cp "$SHADERS_SRC"/*.spv "$STAGE/shaders/" 2>/dev/null || true
-    echo "[+] Shaders: $(find "$STAGE/shaders" -name '*.spv' | wc -l) ficheiros"
+# Launcher em tools/ (para ROOT ser calculado corretamente)
+cp "$ROOT/tools/ac5_launcher.py" "$STAGE/tools/"
+chmod +x "$STAGE/tools/ac5_launcher.py"
+
+# Dados de runtime (essencial: ps2_image.bin)
+cp "$ROOT/generated/ps2_image.bin" "$STAGE/generated/"
+echo "[+] Generated: ps2_image.bin ($(du -h "$STAGE/generated/ps2_image.bin" | cut -f1))"
+
+# Shaders compilados
+if [ -d "$BUILD/shaders" ]; then
+    cp "$BUILD/shaders"/*.spv "$STAGE/shaders/" 2>/dev/null || true
+    echo "[+] Shaders: $(find "$STAGE/shaders" -name '*.spv' | wc -l)"
 fi
 
-# --- documentacao ---
+# Documentacao
 for f in README.md LICENSE CHANGELOG.md; do
     [ -f "$ROOT/$f" ] && cp "$ROOT/$f" "$STAGE/"
 done
 
-# --- script de arranque ---
-cat > "$STAGE/run.sh" <<'EOF'
+# Script de arranque
+cat > "$STAGE/run.sh" <<'EOF2'
 #!/usr/bin/env bash
 cd "$(dirname "$0")"
-exec python3 ac5_launcher.py "$@"
-EOF
+exec python3 tools/ac5_launcher.py "$@"
+EOF2
 chmod +x "$STAGE/run.sh"
 
 # --- gerar tar + sha256 ---
