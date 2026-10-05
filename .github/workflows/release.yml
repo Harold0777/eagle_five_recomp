@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (ex: v0.2.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+              cmake g++ ninja-build \
+              libsdl3-dev libvulkan-dev \
+              glslang-tools \
+              python3 python3-pip
+          pip install --user pyside6
+
+      - name: Determinar versao
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+              echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configurar CMake
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Compilar
+        run: cmake --build build -j$(nproc)
+
+      - name: Empacotar
+        run: ./tools/package.sh ${{ steps.ver.outputs.tag }}
+
+      - name: Upload de artefactos
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-package
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+
+      - name: Criar Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+          generate_release_notes: true
+          draft: false
