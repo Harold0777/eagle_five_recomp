@@ -16,6 +16,8 @@ permissions:
 jobs:
   build-linux:
     runs-on: ubuntu-24.04
+    env:
+      PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/local/lib/x86_64-linux-gnu/pkgconfig
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +30,7 @@ jobs:
               libvulkan-dev glslang-tools \
               libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
               libxi-dev libxfixes-dev libxss-dev libxinerama-dev \
+              libxtst-dev \
               libwayland-dev libxkbcommon-dev libdecor-0-dev \
               libasound2-dev libpulse-dev libudev-dev \
               libdbus-1-dev libibus-1.0-dev
@@ -42,7 +45,10 @@ jobs:
               -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF \
               -DSDL_INSTALL_TESTS=OFF \
               -DSDL_KMSDRM=OFF -DSDL_VIVANTE=OFF \
-              -DSDL_RPI=OFF -DSDL_ROCKCHIP=OFF
+              -DSDL_RPI=OFF -DSDL_ROCKCHIP=OFF \
+              -DSDL_X11_XTEST=OFF -DSDL_X11_XSCRNSAVER=OFF \
+              -DSDL_X11_XCURSOR=OFF -DSDL_X11_XINERAMA=OFF \
+              -DSDL_IBUS=OFF -DSDL_DBUS=OFF -DSDL_LIBUDEV=ON
           cmake --build build -j$(nproc)
           sudo cmake --install build
           sudo ldconfig
@@ -57,9 +63,7 @@ jobs:
           fi
 
       - name: Configurar CMake
-        run: |
-          export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Compilar
         run: cmake --build build -j$(nproc)
