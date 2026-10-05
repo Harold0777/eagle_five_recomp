@@ -24,12 +24,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-              cmake g++ ninja-build \
+              cmake g++ ninja-build pkg-config \
               libvulkan-dev glslang-tools \
               libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
-              libxi-dev libxfixes-dev \
+              libxi-dev libxfixes-dev libxss-dev libxinerama-dev \
               libwayland-dev libxkbcommon-dev libdecor-0-dev \
-              libasound2-dev libpulse-dev libudev-dev
+              libasound2-dev libpulse-dev libudev-dev \
+              libdbus-1-dev libibus-1.0-dev
 
       - name: Construir SDL3 do source
         run: |
@@ -38,7 +39,10 @@ jobs:
           cd /tmp/SDL
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
               -DSDL_SHARED=ON -DSDL_STATIC=OFF \
-              -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+              -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF \
+              -DSDL_INSTALL_TESTS=OFF \
+              -DSDL_KMSDRM=OFF -DSDL_VIVANTE=OFF \
+              -DSDL_RPI=OFF -DSDL_ROCKCHIP=OFF
           cmake --build build -j$(nproc)
           sudo cmake --install build
           sudo ldconfig
