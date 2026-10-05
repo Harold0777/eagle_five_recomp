@@ -36,3 +36,24 @@ tests/mods_resize/
 SLUS_208.51
 saves/
 *.bak_*
+
+# Perfis
+perf.data*
+*.perf
+
+# Backups locais
+*.orig
+runtime/src.bak_vk12/
+third_party/imgui/backends/*.bak
+
+# Python venv
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
