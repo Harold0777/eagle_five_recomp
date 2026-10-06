@@ -465,7 +465,7 @@ void internal_res_status() {
 void internal_res_control() {
     ps2_render_info ri;
     ps2_video_render_info(&ri);
-    static const int VALUES[] = { 0, 1, 2, 3, 4, 5, 6, 8 };
+    static const int VALUES[] = { 0, 1, 2, 4, 5, 8 };
     auto label = [&ri](int v, char *buf, size_t n) {
         double mb = (double)(ri.bytes_at_1x * (uint64_t)(v * v)) / (1024.0 * 1024.0);
         if (v <= 0)
