@@ -1886,6 +1886,9 @@ static struct { u32 tbp, tbw, psm, tw, th, cbp, amax_min, amax_max, nz_max; u64 
     texc[TEXCENSUS_N];
 static unsigned texc_n;
 
+static u64 fs_miss_dispbase, fs_miss_defer;
+static u64 fs_miss_validseq, fs_miss_frame, fs_miss_emitter;
+static u64 fs_miss_valid, fs_miss_ver, fs_miss_prim, fs_miss_epoch;
 void ps2_gs_tex_cache_report(void) {
     /* diag-report */
     { extern void ps2_vk_tex_stats(unsigned long long *, unsigned long long *, unsigned long long *);
@@ -1902,7 +1905,13 @@ void ps2_gs_tex_cache_report(void) {
             texcache_misses > texcache_hits
             ? "  <-- decoding more often than reusing" : "");
     if (fs_memo_hits + fs_memo_misses)
-        ps2_log("GS draw state: worked out %llu times, reused unchanged %llu times "
+        ps2_log("GS memo miss reasons: valid=%llu ver=%llu prim=%llu epoch=%llu validseq=%llu frame=%llu emitter=%llu dispbase=%llu defer=%llu",
+            (unsigned long long)fs_miss_valid, (unsigned long long)fs_miss_ver,
+            (unsigned long long)fs_miss_prim, (unsigned long long)fs_miss_epoch,
+            (unsigned long long)fs_miss_validseq, (unsigned long long)fs_miss_frame,
+            (unsigned long long)fs_miss_emitter, (unsigned long long)fs_miss_dispbase,
+            (unsigned long long)fs_miss_defer);
+    ps2_log("GS draw state: worked out %llu times, reused unchanged %llu times "
                 "(%.1f%%)", (unsigned long long)fs_memo_misses,
                 (unsigned long long)fs_memo_hits,
                 100.0 * (double)fs_memo_hits / (double)(fs_memo_hits + fs_memo_misses));
@@ -3025,7 +3034,7 @@ static struct {
     u32 defer_w, defer_h;
     u8 tex_hit, rt_tex_draw, rt_tex_missed, rt_ztex_draw;
     ps2_vk_state st;
-} fs_memo;
+} fs_memos[256];
 
 static const u8 gs_reg_is_data[0x64] = {
     [0x01] = 1, [0x02] = 1, [0x03] = 1, [0x04] = 1, [0x05] = 1, [0x0A] = 1,
@@ -3033,8 +3042,23 @@ static const u8 gs_reg_is_data[0x64] = {
     [0x54] = 1, [0x60] = 1, [0x61] = 1, [0x62] = 1,
 };
 
+static const u8 gs_reg_affects_state[0x64] = {
+    [GS_TEX0_1] = 1, [GS_TEX0_2] = 1,
+    [GS_TEX1_1] = 1, [GS_TEX1_2] = 1,
+    [GS_CLAMP_1] = 1, [GS_CLAMP_2] = 1,
+    [GS_SCISSOR_1] = 1, [GS_SCISSOR_2] = 1,
+    [GS_ALPHA_1] = 1, [GS_ALPHA_2] = 1,
+    [GS_TEST_1] = 1, [GS_TEST_2] = 1,
+    [GS_FBA_1] = 1, [GS_FBA_2] = 1,
+    [GS_FRAME_1] = 1, [GS_FRAME_2] = 1,
+    [GS_ZBUF_1] = 1, [GS_ZBUF_2] = 1,
+    [GS_COLCLAMP] = 1, [GS_FOGCOL] = 1,
+};
+
 static void fill_state_compute(ps2_vk_state *st);
+
 static void fill_state(ps2_vk_state *st) {
+    u32 slot = gs_prim & 0xFFu;
     static int memo_on = -1;
     u64 h0, rtd0, rtm0, rtz0;
     if (PS2_UNLIKELY(memo_on < 0)) {
@@ -3043,19 +3067,30 @@ static void fill_state(ps2_vk_state *st) {
         if (!memo_on) ps2_log("GS: draw state worked out for every primitive "
                               "(PS2_GS_STATE_MEMO=0 or PS2_CLUT_RT)");
     }
-    if (memo_on && fs_memo.valid && fs_memo.ver == gs_state_ver
-        && fs_memo.prim == gs_prim && fs_memo.epoch_seq == gs_epoch_seq
-        && fs_memo.validation_seq == gs_validation_seq
-        && fs_memo.frame == ps2_gs_frame_count && fs_memo.emitter == rn_gs_emitter
-        && fs_memo.disp_base == gs_disp_base && fs_memo.defer == fill_defer_tex) {
-        *st = fs_memo.st;
+    if (memo_on) {
+        if (!fs_memos[slot].valid) fs_miss_valid++;
+        else if (fs_memos[slot].ver != gs_state_ver) fs_miss_ver++;
+        else if (fs_memos[slot].prim != gs_prim) fs_miss_prim++;
+        else if (fs_memos[slot].epoch_seq != gs_epoch_seq) fs_miss_epoch++;
+        else if (fs_memos[slot].validation_seq != gs_validation_seq) fs_miss_validseq++;
+        else if (fs_memos[slot].frame != ps2_gs_frame_count) fs_miss_frame++;
+        else if (fs_memos[slot].emitter != rn_gs_emitter) fs_miss_emitter++;
+        else if (fs_memos[slot].disp_base != gs_disp_base) fs_miss_dispbase++;
+        else if (fs_memos[slot].defer != fill_defer_tex) fs_miss_defer++;
+    }
+    if (memo_on && fs_memos[slot].valid && fs_memos[slot].ver == gs_state_ver
+        && fs_memos[slot].prim == gs_prim && fs_memos[slot].epoch_seq == gs_epoch_seq
+        && fs_memos[slot].validation_seq == gs_validation_seq
+        && fs_memos[slot].frame == ps2_gs_frame_count && fs_memos[slot].emitter == rn_gs_emitter
+        && fs_memos[slot].disp_base == gs_disp_base && fs_memos[slot].defer == fill_defer_tex) {
+        *st = fs_memos[slot].st;
         fill_state_count(st);
-        texcache_hits += fs_memo.tex_hit;
-        gs_rt_tex_draws += fs_memo.rt_tex_draw;
-        gs_rt_tex_missed += fs_memo.rt_tex_missed;
-        gs_rt_ztex_draws += fs_memo.rt_ztex_draw;
-        fill_defer_w = fs_memo.defer_w;
-        fill_defer_h = fs_memo.defer_h;
+        texcache_hits += fs_memos[slot].tex_hit;
+        gs_rt_tex_draws += fs_memos[slot].rt_tex_draw;
+        gs_rt_tex_missed += fs_memos[slot].rt_tex_missed;
+        gs_rt_ztex_draws += fs_memos[slot].rt_ztex_draw;
+        fill_defer_w = fs_memos[slot].defer_w;
+        fill_defer_h = fs_memos[slot].defer_h;
         fs_memo_hits++;
         return;
     }
@@ -3065,22 +3100,22 @@ static void fill_state(ps2_vk_state *st) {
     fill_state_compute(st);
     fs_memo_misses++;
     if (!memo_on) return;
-    fs_memo.valid = !fill_no_memo;
-    fs_memo.defer = fill_defer_tex;
-    fs_memo.ver = gs_state_ver;
-    fs_memo.prim = gs_prim;
-    fs_memo.epoch_seq = gs_epoch_seq;
-    fs_memo.validation_seq = gs_validation_seq;
-    fs_memo.frame = ps2_gs_frame_count;
-    fs_memo.emitter = rn_gs_emitter;
-    fs_memo.disp_base = gs_disp_base;
-    fs_memo.defer_w = fill_defer_w;
-    fs_memo.defer_h = fill_defer_h;
-    fs_memo.tex_hit = (u8)(texcache_hits + texcache_misses != h0);
-    fs_memo.rt_tex_draw = (u8)(gs_rt_tex_draws - rtd0);
-    fs_memo.rt_tex_missed = (u8)(gs_rt_tex_missed - rtm0);
-    fs_memo.rt_ztex_draw = (u8)(gs_rt_ztex_draws - rtz0);
-    fs_memo.st = *st;
+    fs_memos[slot].valid = !fill_no_memo;
+    fs_memos[slot].defer = fill_defer_tex;
+    fs_memos[slot].ver = gs_state_ver;
+    fs_memos[slot].prim = gs_prim;
+    fs_memos[slot].epoch_seq = gs_epoch_seq;
+    fs_memos[slot].validation_seq = gs_validation_seq;
+    fs_memos[slot].frame = ps2_gs_frame_count;
+    fs_memos[slot].emitter = rn_gs_emitter;
+    fs_memos[slot].disp_base = gs_disp_base;
+    fs_memos[slot].defer_w = fill_defer_w;
+    fs_memos[slot].defer_h = fill_defer_h;
+    fs_memos[slot].tex_hit = (u8)(texcache_hits + texcache_misses != h0);
+    fs_memos[slot].rt_tex_draw = (u8)(gs_rt_tex_draws - rtd0);
+    fs_memos[slot].rt_tex_missed = (u8)(gs_rt_tex_missed - rtm0);
+    fs_memos[slot].rt_ztex_draw = (u8)(gs_rt_ztex_draws - rtz0);
+    fs_memos[slot].st = *st;
 }
 
 static void fill_state_compute(ps2_vk_state *st) {
@@ -4139,7 +4174,7 @@ void ps2_gs_write_reg(u32 reg, u64 val) {
     gs_stat_regs++;
     if (reg < 0x64) {
         gs_reg_hist[reg]++;
-        if (gs_reg[reg] != val && !gs_reg_is_data[reg]) gs_state_ver++;
+        if (gs_reg[reg] != val && !gs_reg_is_data[reg] && reg < 0x64 && gs_reg_affects_state[reg]) gs_state_ver++;
         gs_reg[reg] = val;
     }
     switch (reg) {
