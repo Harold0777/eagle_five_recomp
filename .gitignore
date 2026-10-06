@@ -60,3 +60,6 @@ venv/
 
 # Release output
 dist/
+
+# Release tarballs
+*.tar.gz
