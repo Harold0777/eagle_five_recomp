@@ -2256,7 +2256,7 @@ static u32 current_texture_inner(float *out_w, float *out_h) {
                     if (src != gs_vram) gs_shadow_runs++;
                 }
                 if (run > tw - x) run = tw - x;
-                if (psm == PSM_T8 || psm == PSM_T4) {
+                if (psm == PSM_T8 || psm == PSM_T4 || psm == PSM_T8H) {
                     const u32 base = (u32)(blkbit >> 3);
                     u32 *dst = (u32 *)(row + x * 4u);
                     const u16 *offsets = off_row + xb;
@@ -2278,6 +2278,25 @@ static u32 current_texture_inner(float *out_w, float *out_h) {
                             }
                             for (; k < run; k++) {
                                 const u32 raw = block[offsets[k] >> 3];
+                                dst[k] = pal[raw];
+                                hash = (hash ^ raw) * 16777619u;
+                            }
+                        } else if (psm == PSM_T8H) {
+                            for (k = 0; k + 4u <= run; k += 4u) {
+                                const u32 r0 = block[(offsets[k] >> 3) + 3u];
+                                const u32 r1 = block[(offsets[k + 1u] >> 3) + 3u];
+                                const u32 r2 = block[(offsets[k + 2u] >> 3) + 3u];
+                                const u32 r3 = block[(offsets[k + 3u] >> 3) + 3u];
+                                dst[k] = pal[r0];
+                                dst[k + 1u] = pal[r1];
+                                dst[k + 2u] = pal[r2];
+                                dst[k + 3u] = pal[r3];
+                                hash = (((hash << 13) | (hash >> 19))
+                                        ^ (r0 | (r1 << 8) | (r2 << 16) | (r3 << 24)))
+                                     * 0x9E3779B1u;
+                            }
+                            for (; k < run; k++) {
+                                const u32 raw = block[(offsets[k] >> 3) + 3u];
                                 dst[k] = pal[raw];
                                 hash = (hash ^ raw) * 16777619u;
                             }
