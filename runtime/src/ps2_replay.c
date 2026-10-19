@@ -17,6 +17,7 @@ int  ps2_gs_present(void);
 void ps2_vu1_init(void);
 void ps2_gif_transfer(const ps2_reg128 *data, u32 qwc);
 void ps2_vif_fifo(int which, const ps2_reg128 *q);
+void ps2_vif_transfer(int which, const ps2_reg128 *q, u32 qwc);
 void ps2_vif_write(int which, u32 word);
 void ps2_vif_fbrst(int which, u32 val);
 void ps2_vif_clear_stall(int which);
@@ -241,12 +242,7 @@ static void replay_pass(u32 field_limit, pass_result *res) {
             if (!p) { ok = 0; break; }
             ps2_cap_dict_insert(p, qwc * 16u);
             if (is_vif) {
-                u32 i;
-                if (!ps2_vif_stalled((int)(ch & 1u)))
-                    for (i = 0; i < qwc; i++) {
-                        ps2_vif_fifo((int)(ch & 1u), &((const ps2_reg128 *)p)[i]);
-                        if (ps2_vif_stalled((int)(ch & 1u))) break;
-                    }
+                ps2_vif_transfer((int)(ch & 1u), (const ps2_reg128 *)p, qwc);
             } else {
                 ps2_gif_transfer((const ps2_reg128 *)p, qwc);
             }
@@ -270,12 +266,8 @@ static void replay_pass(u32 field_limit, pass_result *res) {
                 break;
             }
             if (is_vif) {
-                u32 i, qwc = len / 16u;
-                if (!ps2_vif_stalled((int)(ch & 1u)))
-                    for (i = 0; i < qwc; i++) {
-                        ps2_vif_fifo((int)(ch & 1u), &((const ps2_reg128 *)p)[i]);
-                        if (ps2_vif_stalled((int)(ch & 1u))) break;
-                    }
+                u32 qwc = len / 16u;
+                ps2_vif_transfer((int)(ch & 1u), (const ps2_reg128 *)p, qwc);
             } else {
                 ps2_gif_transfer((const ps2_reg128 *)p, len / 16u);
             }
