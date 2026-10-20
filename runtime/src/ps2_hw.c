@@ -984,6 +984,10 @@ void ps2_dmac_ipu_out_history(void) {
 
 void ps2_dmac_ipu_drain(void) { dma_ipu_out_advance(); }
 
+void ps2_dmac_set_complete(u32 ch) {
+    if (ch < 10u) d_stat |= 1u << ch;
+}
+
 u32 ps2_dmac_pending(void) {
     return d_stat & 0x3FFu;
 }

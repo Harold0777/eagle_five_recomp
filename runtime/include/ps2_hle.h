@@ -83,6 +83,7 @@ void ps2_dmac_ipu_report(u32 *chcr, u32 *madr, u32 *qwc, u32 *tadr);
 void ps2_dmac_ipu_history(void);
 void ps2_dmac_ipu_out_history(void);
 void ps2_gs_trx_history(void);
+void ps2_dmac_set_complete(u32 ch);
 u32  ps2_dmac_pending(void);
 void ps2_dmac_ack(int ch);
 void ps2_ipu_report(void);

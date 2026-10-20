@@ -939,15 +939,18 @@ void ps2_syscall(ps2_ctx *ctx) {
     case 119: {
         u32 sdd = A0;
         int n = (int)A1, i;
+        u32 transferred = 0;
         for (i = 0; i < n; i++) {
             u32 e = sdd + (u32)i * 16u;
             u32 src = ps2_r32(e + 0), dst = ps2_r32(e + 4), size = ps2_r32(e + 8);
             if (!size) continue;
             for (u32 k = 0; k < size; k++) ps2_w8(dst + k, ps2_r8(src + k));
             sif_dma_bytes += size;
+            transferred += size;
         }
         sif_dma_id++;
         if (!sif_dma_id) sif_dma_id = 1;
+        if (transferred > 0u) ps2_dmac_set_complete(5u);
         RET(sif_dma_id);
         return;
     }
