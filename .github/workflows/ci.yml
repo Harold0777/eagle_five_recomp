@@ -7,7 +7,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: deps
-        run: apt-get update && apt-get install -y cmake pkg-config libvulkan-dev glslang-tools libsdl3-dev
+        run: apt-get update && apt-get install -y cmake pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
       - name: configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON
       - name: build
