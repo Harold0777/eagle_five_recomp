@@ -186,7 +186,7 @@ The High preset uses 4x. No fix is currently planned.
 
 ## AppImage
 
-O AppImage **não é distribuído**: ele contém o código recompilado do jogo, então cada pessoa gera o seu a partir da própria cópia do jogo.
+O AppImage está disponível na página de Releases. Ele não inclui o jogo: você precisa da sua própria ISO e do `ps2_image.bin`. Também dá para gerar o seu com os passos abaixo.
 
 Requisitos: `generated/` e `ps2_image.bin` já gerados localmente, GCC 15+ ou Clang 13+, SDL3 e Vulkan SDK (`glslc`) instalados, e `python3` com PySide6 ou PyQt no sistema (o launcher usa Qt e o AppImage não embute o Python).
 
