@@ -2514,7 +2514,8 @@ static void select_target(VkCommandBuffer cmd, vk_target *t, vk_target *zt) {
                 t->layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                     ? VK_ACCESS_2_SHADER_READ_BIT : 0,
                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
+                | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT);
         t->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
     zundef = zt->dlayout == VK_IMAGE_LAYOUT_UNDEFINED;
@@ -2526,7 +2527,8 @@ static void select_target(VkCommandBuffer cmd, vk_target *t, vk_target *zt) {
                          : VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
                 was_read ? VK_ACCESS_2_SHADER_READ_BIT : 0,
                 VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+                | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT);
         zt->dlayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
     }
     barrier_flush(cmd, batch, nb);
