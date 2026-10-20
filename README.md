@@ -133,6 +133,37 @@ The settings menu now only offers Auto, Native, 2x, 4x, 5x, and 8x. See
 
 ---
 
+## Benchmarks
+
+All numbers were measured on one machine (Ryzen 7 7735HS, Radeon 680M with RADV, CachyOS, GCC 16.2.1, Release build, hot files at -O3).
+
+### Method
+
+`gsreplay` replays a recorded capture (`out/capture.gscap`, 42 fields) deterministically and checks that every field matches the recorded run. It does not compile the generated guest code, so it measures the runtime (VIF, GIF, GS, texture decode) only.
+
+- Native internal resolution, `PS2_PRESENT_MODE=immediate`, power profile `performance`, lsfg-vk layer disabled.
+- Each result is the median ms/field over 10 passes, discarding pass 1.
+- Binaries are compared A/B, alternating, in the same session. Run-to-run noise across sessions is about 6%, so only same-session comparisons count.
+- A change is accepted only with 0 fidelity divergences and a lower median in 3 consecutive A/B rounds.
+
+### Results
+
+Baseline: about 11.0 ms/field (about 90 fields/s) in `gsreplay`.
+
+| Change | Result | Kept |
+|---|---|---|
+| PSMT8H texture decode fast path | 0.32 to 0.45 ms/field lower (about 3 to 4%), 3 of 3 rounds, 0 divergences | yes |
+| `-march=znver3` | 0.07 to 0.24 ms/field slower | no |
+| Global LTO | within noise (-0.01 to +0.09 ms) | no |
+| V4-32 UNPACK fast path in the VIF | within noise | no |
+| Deferring the epoch bump on identical uploads | not implemented: a diagnostic showed at most 165 of 1449 texture invalidations (11%) could be avoided | no |
+
+### Real game
+
+One 125 s session at internal resolution 2, 1920x1080, present mode immediate: 7464 fields at 59.8 fields/s, 3 fields dropped (all in the first 600), and the EE never waited on a full graphics ring. The graphics thread averaged 3.99 ms/field of the 16.68 ms budget.
+
+Caveats: a single capture and a single session. Gains on other game phases or other hardware may differ.
+
 ## Known issues
 
 ### 3x internal resolution artifacts
