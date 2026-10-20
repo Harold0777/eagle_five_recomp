@@ -59,11 +59,4 @@ export OUTPUT="EagleFive-x86_64.AppImage"
   --custom-apprun "$ROOT/packaging/AppRun" \
   --output appimage
 
-DATA="${XDG_DATA_HOME:-$HOME/.local/share}/eagle_five"
-if [ -f "$ROOT/generated/ps2_image.bin" ]; then
-  mkdir -p "$DATA/generated"
-  cp "$ROOT/generated/ps2_image.bin" "$DATA/generated/"
-  echo "ps2_image.bin copiado para $DATA/generated/"
-fi
-
 echo "Gerado: $ROOT/$OUTPUT"

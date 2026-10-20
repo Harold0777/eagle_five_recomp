@@ -184,16 +184,40 @@ environment variable still works if you need it for investigation.
 
 The High preset uses 4x. No fix is currently planned.
 
-## AppImage
+## Downloads and AppImage
 
-O AppImage está disponível na página de Releases. Ele não inclui o jogo: você precisa da sua própria ISO e do `ps2_image.bin`. Também dá para gerar o seu com os passos abaixo.
+Two builds are available on the [v0.3.0 release page](https://github.com/Harold0777/eagle_five_recomp/releases/tag/v0.3.0):
 
-Requisitos: `generated/` e `ps2_image.bin` já gerados localmente, GCC 15+ ou Clang 13+, SDL3 e Vulkan SDK (`glslc`) instalados, e `python3` com PySide6 ou PyQt no sistema (o launcher usa Qt e o AppImage não embute o Python).
+- [`ac5-recomp-v0.3.0-linux-x86_64.tar.gz`](https://github.com/Harold0777/eagle_five_recomp/releases/download/v0.3.0/ac5-recomp-v0.3.0-linux-x86_64.tar.gz): portable tarball.
+- `EagleFive-x86_64.AppImage`: single file with the graphical launcher (`tools/ac5_launcher.py`).
+
+Neither build includes the game. You need your own legally dumped ISO of Ace Combat 5 (USA, `SLUS_208.51`).
+
+### Running the AppImage
 
 ```bash
-./tools/make_appimage.sh
+chmod +x EagleFive-x86_64.AppImage
 ./EagleFive-x86_64.AppImage
 ```
 
-O script compila, empacota o launcher (`tools/ac5_launcher.py`) e copia o `ps2_image.bin` para `~/.local/share/eagle_five/generated/`. Ao abrir o AppImage, o launcher pede a ISO do jogo e inicia o `ac5` com ela. Saves e configurações ficam em `~/.local/share/eagle_five/`. A `libvulkan` vem do sistema, não do AppImage.
+Pick your ISO in the launcher and press play. On the first run the launcher extracts the game executable from the ISO and creates `ps2_image.bin` in `~/.local/share/eagle_five/generated/`. Saves and settings also live in `~/.local/share/eagle_five/`.
 
+Requirements: `python3` with PySide6 or PyQt (the launcher uses Qt and the AppImage does not bundle Python) and a Vulkan driver. The system `libvulkan` is used, not a bundled one.
+
+### Running the tarball
+
+The tarball does not include `ps2_image.bin`. Create it once from your ISO with the helper script in this repository, then run `ac5` from the extracted folder:
+
+```bash
+git clone https://github.com/Harold0777/eagle_five_recomp
+python3 eagle_five_recomp/tools/make_image.py /path/to/AC5.iso generated
+./ac5 --data generated --disc /path/to/AC5.iso
+```
+
+### Building the AppImage yourself
+
+Needs the generated sources (`generated/`), GCC 15+ or Clang 13+, SDL3 and the Vulkan SDK (`glslc`):
+
+```bash
+./tools/make_appimage.sh
+```

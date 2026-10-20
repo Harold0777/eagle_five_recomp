@@ -229,4 +229,6 @@ endif()
 
 if(NOT PS2_RUNTIME_ONLY)
   install(PROGRAMS tools/ac5_launcher.py DESTINATION share/eagle_five/tools)
+  install(PROGRAMS tools/make_image.py DESTINATION share/eagle_five/tools)
+  install(FILES tools/ps2recomp/elf.py DESTINATION share/eagle_five/tools/ps2recomp)
 endif()

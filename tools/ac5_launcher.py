@@ -1002,6 +1002,18 @@ class Launcher(W.QMainWindow):
         pre = "".join("%s=%s " % kv for kv in self.extra_env().items())
         self.cmd_lbl.setText(pre + line)
 
+    def ensure_image(self):
+        data = Path(self.data.text().strip() or "generated")
+        if not data.is_absolute():
+            data = (GAME_DIR or ROOT) / data
+        if (data / "ps2_image.bin").is_file():
+            return
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import make_image
+        self.log.appendPlainText("A gerar ps2_image.bin a partir da ISO...")
+        out, _base, size = make_image.build_image(self.iso.text().strip(), data)
+        self.log.appendPlainText("ps2_image.bin criado: %s (%d bytes)" % (out, size))
+
     def play(self):
         if self.proc:
             self.stop_game()
@@ -1013,6 +1025,11 @@ class Launcher(W.QMainWindow):
                                    % self.exe())
             return
         if not self.save_settings(quiet=True):
+            return
+        try:
+            self.ensure_image()
+        except Exception as e:
+            W.QMessageBox.critical(self, "Erro", "Não foi possível gerar o ps2_image.bin:\n%s" % e)
             return
         self.persist_cfg()
         env = QtCore.QProcessEnvironment.systemEnvironment()
