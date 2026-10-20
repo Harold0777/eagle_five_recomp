@@ -22,6 +22,8 @@ find_package(Vulkan REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL3 REQUIRED sdl3)
 
+option(PS2_RUNTIME_ONLY "build only gsreplay (no generated code needed, for CI)" OFF)
+
 set(PS2_GENERATED_DIR "generated" CACHE STRING
     "recompiler output directory, relative to the source tree")
 set(GEN_DIR "${CMAKE_SOURCE_DIR}/${PS2_GENERATED_DIR}")
@@ -112,6 +114,7 @@ set(IMGUI_SOURCES
 set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_OPTIONS "-w")
 list(APPEND RUNTIME_SOURCES ${IMGUI_SOURCES})
 
+if(NOT PS2_RUNTIME_ONLY)
 add_executable(ac5 ${RUNTIME_SOURCES} ${GENERATED_SOURCES})
 target_include_directories(ac5 PRIVATE runtime/include "${GEN_DIR}"
                                        ${IMGUI_DIR} ${IMGUI_DIR}/backends
@@ -129,9 +132,12 @@ endif()
 set_source_files_properties(${GENERATED_SOURCES} PROPERTIES
                             COMPILE_OPTIONS "${GEN_COMPILE_OPTIONS}")
 
+endif()
+
 set(HOT_SOURCES runtime/src/ps2_vu.c runtime/src/ps2_gs.c runtime/src/ps2_hw.c)
 set_source_files_properties(${HOT_SOURCES} PROPERTIES COMPILE_OPTIONS "-O3")
 
+if(NOT PS2_RUNTIME_ONLY)
 if(PS2_DIAG)
   target_compile_definitions(ac5 PRIVATE PS2_DIAG=1)
 endif()
@@ -142,6 +148,8 @@ target_compile_options(ac5 PRIVATE
     -Wall -Wextra
     -Wno-unused-parameter -Wno-unused-variable -Wno-unused-but-set-variable
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions -fno-rtti>)
+
+endif()
 
 set(REPLAY_SOURCES ${RUNTIME_SOURCES})
 list(REMOVE_ITEM REPLAY_SOURCES runtime/src/ps2_main.c
@@ -195,7 +203,9 @@ foreach(SH gs.vert gs.frag gs_zcopy.frag colclip.frag present.vert present.frag
   list(APPEND SPV_FILES "${SHADER_OUT}/${SH}.spv")
 endforeach()
 add_custom_target(shaders ALL DEPENDS ${SPV_FILES})
-add_dependencies(ac5 shaders)
+if(NOT PS2_RUNTIME_ONLY)
+  add_dependencies(ac5 shaders)
+endif()
 add_dependencies(gsreplay shaders)
 
 include(CheckCSourceCompiles)
