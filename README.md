@@ -4,6 +4,7 @@
 [![Language: C23 / C++17](https://img.shields.io/badge/language-C23%20%2F%20C%2B%2B17-orange)]()
 [![Vulkan 1.2+](https://img.shields.io/badge/Vulkan-1.2%2B-red)]()
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)]()
+[![CI](https://github.com/Harold0777/eagle_five_recomp/actions/workflows/ci.yml/badge.svg)](https://github.com/Harold0777/eagle_five_recomp/actions/workflows/ci.yml)
 
 A static recompilation of **Ace Combat 5: The Unsung War (USA)** for Linux,
 forked from [sal063/Ace-Combat-5-Static-recompilation](https://github.com/sal063/Ace-Combat-5-Static-recompilation)
