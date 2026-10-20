@@ -63,3 +63,11 @@ dist/
 
 # Release tarballs
 *.tar.gz
+build_clean/
+build_z3/
+build_lto/
+out/
+perf_gs.data
+census.txt
+bench_base*.txt
+perf_*.data
