@@ -55,7 +55,14 @@ CFG_FILE = config_dir() / "config.json"
 OLD_CFG = Path.home() / ".config" / "ac5-launcher.json"
 
 
+APPIMAGE_BIN = os.environ.get("AC5_BIN")
+GAME_DIR = (Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+            / "eagle_five") if APPIMAGE_BIN else None
+
+
 def find_exe():
+    if APPIMAGE_BIN and Path(APPIMAGE_BIN).is_file():
+        return Path(APPIMAGE_BIN)
     cands = [ROOT, ROOT / "build" / PLAT_DIR]
     if (ROOT / "build").is_dir():
         cands += sorted(p for p in (ROOT / "build").iterdir() if p.is_dir())
@@ -817,6 +824,8 @@ class Launcher(W.QMainWindow):
 
     # ---------------- definições ----------------
     def exe(self):
+        if APPIMAGE_BIN:
+            return Path(APPIMAGE_BIN)
         return Path(self.exe_edit.text().strip())
 
     def apply_preset(self, name):
@@ -857,7 +866,7 @@ class Launcher(W.QMainWindow):
             else:
                 clear(lay)
         self.fields.clear()
-        ini = self.exe().parent / "ac5_settings.ini"
+        ini = (GAME_DIR or self.exe().parent) / "ac5_settings.ini"
         if not ini.is_file():
             self.notify("ac5_settings.ini não existe (corre o jogo uma vez).")
             return
@@ -958,7 +967,7 @@ class Launcher(W.QMainWindow):
                 changes[i] = new
         if changes:
             try:
-                save_ini(self.exe().parent / "ac5_settings.ini", self.lines, changes)
+                save_ini((GAME_DIR or self.exe().parent) / "ac5_settings.ini", self.lines, changes)
             except OSError as e:
                 W.QMessageBox.critical(self, "Erro", "Não foi possível guardar o .ini:\n%s" % e)
                 return False
@@ -1011,7 +1020,7 @@ class Launcher(W.QMainWindow):
             env.insert(k, v)
         p = QtCore.QProcess(self)
         p.setProcessEnvironment(env)
-        p.setWorkingDirectory(str(ROOT))
+        p.setWorkingDirectory(str(GAME_DIR or ROOT))
         p.setProcessChannelMode(QtCore.QProcess.ProcessChannelMode.MergedChannels)
         p.readyReadStandardOutput.connect(lambda: self.log.appendPlainText(
             bytes(p.readAll()).decode("utf-8", "replace").rstrip()))

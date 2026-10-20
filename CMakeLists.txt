@@ -219,3 +219,14 @@ if(NOT HAVE_MUSTTAIL)
     "This compiler has no musttail attribute. Cross-function guest loops will "
     "consume stack. GCC 15+ or Clang 13+ is required for a correct build.")
 endif()
+
+if(NOT PS2_RUNTIME_ONLY)
+  install(TARGETS ac5 RUNTIME DESTINATION bin)
+  install(DIRECTORY "${SHADER_OUT}/" DESTINATION share/eagle_five/shaders
+          FILES_MATCHING PATTERN "*.spv")
+  install(DIRECTORY config/ DESTINATION share/eagle_five/config)
+endif()
+
+if(NOT PS2_RUNTIME_ONLY)
+  install(PROGRAMS tools/ac5_launcher.py DESTINATION share/eagle_five/tools)
+endif()

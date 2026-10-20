@@ -1,0 +1,13 @@
+#!/bin/sh
+HERE="$(dirname "$(readlink -f "$0")")"
+export PATH="$HERE/usr/bin:$PATH"
+export LD_LIBRARY_PATH="$HERE/usr/lib:${LD_LIBRARY_PATH:-}"
+
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}/eagle_five"
+mkdir -p "$DATA"
+ln -sfn "$HERE/usr/share/eagle_five/shaders" "$DATA/shaders"
+[ -d "$DATA/config" ] || cp -r "$HERE/usr/share/eagle_five/config" "$DATA/config"
+
+cd "$DATA"
+export AC5_BIN="$HERE/usr/bin/ac5"
+exec python3 "$HERE/usr/share/eagle_five/tools/ac5_launcher.py" "$@"

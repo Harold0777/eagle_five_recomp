@@ -71,3 +71,8 @@ perf_gs.data
 census.txt
 bench_base*.txt
 perf_*.data
+AppDir/
+build-appimage/
+linuxdeploy-x86_64.AppImage
+EagleFive-x86_64.AppImage
+appimage.log

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Eagle Five
+Comment=Ace Combat 5 - Linux recomp
+Exec=ac5
+Icon=eagle_five
+Categories=Game;
+Terminal=false
