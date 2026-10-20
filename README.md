@@ -183,3 +183,17 @@ accident, rather than silently promoting 3x to 4x. The `PS2_UPSCALE=3`
 environment variable still works if you need it for investigation.
 
 The High preset uses 4x. No fix is currently planned.
+
+## AppImage
+
+O AppImage **não é distribuído**: ele contém o código recompilado do jogo, então cada pessoa gera o seu a partir da própria cópia do jogo.
+
+Requisitos: `generated/` e `ps2_image.bin` já gerados localmente, GCC 15+ ou Clang 13+, SDL3 e Vulkan SDK (`glslc`) instalados, e `python3` com PySide6 ou PyQt no sistema (o launcher usa Qt e o AppImage não embute o Python).
+
+```bash
+./tools/make_appimage.sh
+./EagleFive-x86_64.AppImage
+```
+
+O script compila, empacota o launcher (`tools/ac5_launcher.py`) e copia o `ps2_image.bin` para `~/.local/share/eagle_five/generated/`. Ao abrir o AppImage, o launcher pede a ISO do jogo e inicia o `ac5` com ela. Saves e configurações ficam em `~/.local/share/eagle_five/`. A `libvulkan` vem do sistema, não do AppImage.
+
