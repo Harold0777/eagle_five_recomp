@@ -50,6 +50,9 @@ static u32 d_ctrl, d_stat, d_pcr, d_sqwc, d_rbsr, d_rbor, d_stadr, d_enable;
 static u32 intc_stat, intc_mask;
 
 void ps2_kernel_poll_vblank(void);
+void ps2_kernel_wait_vblank(u64 max_ns);
+
+static u32 intc_stat_read(u32 stat_now);
 
 #define T_CLKS_M   0x0003u
 #define T_ZRET_M   0x0040u
@@ -1117,7 +1120,7 @@ static u32 hw_read32(u32 a) {
     case 0x1000E040u: return d_rbsr;
     case 0x1000E050u: return d_rbor;
     case 0x1000E060u: return d_stadr;
-    case 0x1000F000u: ps2_kernel_poll_vblank(); return intc_stat;
+    case 0x1000F000u: ps2_kernel_poll_vblank(); return intc_stat_read(intc_stat);
     case 0x1000F010u: return intc_mask;
     case 0x1000F520u: return d_enable;
     default: break;
@@ -1220,6 +1223,33 @@ static void hw_write32(u32 a, u32 v) {
 
 u8 ps2_mmio_r8(u32 a) { return (u8)(hw_read32(a & ~3u) >> ((a & 3u) * 8)); }
 u16 ps2_mmio_r16(u32 a) { return (u16)(hw_read32(a & ~3u) >> ((a & 2u) * 8)); }
+
+static u32 intc_stat_read(u32 stat_now) {
+    static u32 reads;
+    static u64 window_ns;
+    static int spinning, enabled = -1;
+    struct timespec ts;
+    u64 now;
+    if (enabled < 0) {
+        const char *e = getenv("PS2_VSYNC_SLEEP");
+        enabled = !(e && *e == '0');
+    }
+    if (!enabled) return stat_now;
+    if (stat_now & 4u) { reads = 0; spinning = 0; return stat_now; }
+    if (spinning) {
+        ps2_kernel_wait_vblank(2000000ull);
+        ps2_kernel_poll_vblank();
+        if (intc_stat & 4u) { reads = 0; spinning = 0; }
+        return intc_stat;
+    }
+    if (++reads < 64u) return stat_now;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    now = (u64)ts.tv_sec * 1000000000ull + (u64)ts.tv_nsec;
+    if (window_ns && now - window_ns < 250000ull) spinning = 1;
+    window_ns = now;
+    reads = 0;
+    return stat_now;
+}
 
 u32 ps2_mmio_r32(u32 a) {
     if (a >= 0x12000000u && a < 0x12002000u) return (u32)ps2_gs_priv_read(a);

@@ -7,6 +7,10 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#elif defined(__linux__)
+#include <errno.h>
+#include <sys/mman.h>
+#include <unistd.h>
 #endif
 
 #define HOOK_MAX_CHAIN   8
@@ -69,6 +73,24 @@ __asm__(
     "    jz    1f\n"
     "    jmpq  *%rax\n"
     "1:  ret\n");
+void ps2_hook_thunk(void);
+#define HOOK_SUPPORTED 1
+#elif defined(__linux__) && defined(__x86_64__)
+__asm__(
+    ".text\n"
+    ".globl ps2_hook_thunk\n"
+    ".type ps2_hook_thunk, @function\n"
+    "ps2_hook_thunk:\n"
+    "    pushq %rdi\n"
+    "    movq  %rdi, %rsi\n"
+    "    movl  %r10d, %edi\n"
+    "    call  ps2_hook_enter\n"
+    "    popq  %rdi\n"
+    "    testq %rax, %rax\n"
+    "    jz    1f\n"
+    "    jmpq  *%rax\n"
+    "1:  ret\n"
+    ".size ps2_hook_thunk, .-ps2_hook_thunk\n");
 void ps2_hook_thunk(void);
 #define HOOK_SUPPORTED 1
 #else
@@ -182,7 +204,33 @@ static int may_patch(const char *what, u32 addr, const char *owner) {
     return 0;
 }
 
-#if HOOK_SUPPORTED
+#if HOOK_SUPPORTED && !defined(_WIN32)
+static u8 *alloc_near(void *anchor, unsigned bytes) {
+    const uintptr_t gran = 0x10000u;
+    uintptr_t base = (uintptr_t)anchor & ~(gran - 1u);
+    for (uintptr_t d = gran; d < 0x40000000ull; d += gran) {
+        void *p;
+        p = mmap((void *)(base + d), bytes, PROT_READ | PROT_WRITE | PROT_EXEC,
+                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+        if (p != MAP_FAILED) return (u8 *)p;
+        if (base > d) {
+            p = mmap((void *)(base - d), bytes,
+                     PROT_READ | PROT_WRITE | PROT_EXEC,
+                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+            if (p != MAP_FAILED) return (u8 *)p;
+        }
+    }
+    return NULL;
+}
+
+static int code_protect(u8 *at, unsigned bytes, int writable) {
+    uintptr_t page = (uintptr_t)sysconf(_SC_PAGESIZE);
+    uintptr_t lo = (uintptr_t)at & ~(page - 1u);
+    uintptr_t hi = ((uintptr_t)at + bytes + page - 1u) & ~(page - 1u);
+    return mprotect((void *)lo, hi - lo,
+                    PROT_READ | PROT_EXEC | (writable ? PROT_WRITE : 0));
+}
+#elif HOOK_SUPPORTED
 static u8 *alloc_near(void *anchor, unsigned bytes) {
     SYSTEM_INFO si;
     uintptr_t base, gran;
@@ -208,7 +256,7 @@ int ps2_hook_init(void) {
 #if !HOOK_SUPPORTED
     if (!hook_state) {
         hook_state = -1;
-        ps2_log("hook: detours are implemented for 64-bit Windows only");
+        ps2_log("hook: detours are implemented for x86-64 Windows and Linux only");
     }
     return -1;
 #else
@@ -231,15 +279,41 @@ int ps2_hook_init(void) {
 }
 
 #if HOOK_SUPPORTED
+static int sled_ok(const u8 *p) {
+    static const struct { u8 len, nsig; u8 sig[4]; } nops[] = {
+        { 8, 4, { 0x0F, 0x1F, 0x84, 0x00 } },
+        { 7, 3, { 0x0F, 0x1F, 0x80 } },
+        { 6, 4, { 0x66, 0x0F, 0x1F, 0x44 } },
+        { 5, 4, { 0x0F, 0x1F, 0x44, 0x00 } },
+        { 4, 3, { 0x0F, 0x1F, 0x40 } },
+        { 3, 3, { 0x0F, 0x1F, 0x00 } },
+        { 2, 2, { 0x66, 0x90 } },
+        { 1, 1, { 0x90 } },
+    };
+    unsigned at = 0;
+    while (at < 8u) {
+        unsigned hit = 0;
+        for (unsigned k = 0; k < sizeof nops / sizeof nops[0]; k++) {
+            if (at + nops[k].len > 8u || memcmp(p + at, nops[k].sig, nops[k].nsig)) continue;
+            hit = nops[k].len;
+            break;
+        }
+        if (!hit) return 0;
+        at += hit;
+    }
+    return 1;
+}
+
 static int write_detour(hook_site *s) {
+#ifdef _WIN32
     DWORD old;
+#endif
     unsigned id = (unsigned)(s - sites);
     u8 *stub = stub_pool + stub_used;
     long long to_thunk, to_stub;
 
     if (s->patched) return 0;
-    for (int i = 0; i < 8; i++) {
-        if (s->host[i] == 0x90) continue;
+    if (!sled_ok(s->host)) {
         ps2_log("hook: %08X does not begin with a patch sled -- this exe was "
                 "built with PS2_HOOK_ENTRIES=OFF, so hooks are refused",
                 s->guest);
@@ -257,6 +331,7 @@ static int write_detour(hook_site *s) {
     memcpy(stub + 2, &id, 4);
     stub[6] = 0xE9;
     { int32_t r32 = (int32_t)to_thunk; memcpy(stub + 7, &r32, 4); }
+#ifdef _WIN32
     FlushInstructionCache(GetCurrentProcess(), stub, STUB_BYTES);
     if (!VirtualProtect(s->host, 8, PAGE_EXECUTE_READWRITE, &old)) {
         ps2_log("hook: cannot make %08X writable (%lu)", s->guest,
@@ -267,6 +342,16 @@ static int write_detour(hook_site *s) {
     { int32_t r32 = (int32_t)to_stub; memcpy(s->host + 1, &r32, 4); }
     VirtualProtect(s->host, 8, old, &old);
     FlushInstructionCache(GetCurrentProcess(), s->host, 8);
+#else
+    if (code_protect(s->host, 8, 1) != 0) {
+        ps2_log("hook: cannot make %08X writable (%s)", s->guest,
+                strerror(errno));
+        return -1;
+    }
+    s->host[0] = 0xE9;
+    { int32_t r32 = (int32_t)to_stub; memcpy(s->host + 1, &r32, 4); }
+    code_protect(s->host, 8, 0);
+#endif
     stub_used += STUB_BYTES;
     s->stub = stub;
     s->patched = 1;

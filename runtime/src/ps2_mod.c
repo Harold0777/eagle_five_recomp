@@ -16,6 +16,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <dlfcn.h>
 #endif
 
 typedef struct { char *key, *val; } mod_opt;
@@ -634,9 +636,13 @@ static void natives_load(mod_info *m) {
     if (!d) return;
     while ((e = readdir(d)) != NULL && n < 64) {
         size_t len = strlen(e->d_name);
+#ifdef _WIN32
         if (len < 5) continue;
         if (strcmp(e->d_name + len - 4, ".dll") && strcmp(e->d_name + len - 4, ".DLL"))
             continue;
+#else
+        if (len < 4 || strcmp(e->d_name + len - 3, ".so")) continue;
+#endif
         names[n] = strdup(e->d_name);
         if (names[n]) n++;
     }
@@ -692,9 +698,44 @@ static void natives_load(mod_info *m) {
             m->natives_ok++;
         }
 #else
-        ps2_log("mod: %s: native modules are loaded on Windows only; %s skipped",
-                m->id, names[i]);
-        m->natives_failed++;
+        char rel[1024], full[PATH_MAX];
+        void *h;
+        ac5_mod_main_fn entry;
+        const ac5_api *api = api_of(m), *prev;
+        int rc;
+        snprintf(rel, sizeof rel, "%s/%s", m->dir, names[i]);
+        if (!realpath(rel, full)) {
+            m->natives_failed++;
+            free(names[i]);
+            continue;
+        }
+        h = dlopen(full, RTLD_NOW | RTLD_LOCAL);
+        if (!h) {
+            ps2_log("mod: %s: cannot load %s (%s)", m->id, names[i], dlerror());
+            m->natives_failed++;
+            free(names[i]);
+            continue;
+        }
+        entry = (ac5_mod_main_fn)dlsym(h, "ac5_mod_main");
+        if (!entry) {
+            ps2_log("mod: %s: %s exports no ac5_mod_main; unloaded", m->id,
+                    names[i]);
+            dlclose(h);
+            m->natives_failed++;
+            free(names[i]);
+            continue;
+        }
+        ps2_log("mod: %s runs native code from %s", m->id, names[i]);
+        prev = ps2_modapi_enter(api);
+        rc = entry(api);
+        ps2_modapi_leave(prev);
+        if (rc) {
+            ps2_log("mod: %s: %s's ac5_mod_main returned %d (failure); anything "
+                    "it attached first stays attached", m->id, names[i], rc);
+            m->natives_failed++;
+        } else {
+            m->natives_ok++;
+        }
 #endif
         free(names[i]);
     }

@@ -1116,16 +1116,20 @@ static int create_swapchain(void) {
     if (swap_extent.width == 0 || swap_extent.height == 0) return 1;
 
     {
-        VkResult _r = vkGetPhysicalDeviceSurfaceFormatsKHR(phys, surface, &nf, fmts);
-        if (_r != VK_SUCCESS && _r != VK_INCOMPLETE) {
-            ps2_log("vk: surface formats query failed (%d)", _r);
-            return 1;
+        VkResult r = vkGetPhysicalDeviceSurfaceFormatsKHR(phys, surface, &nf, fmts);
+        if (r != VK_SUCCESS && r != VK_INCOMPLETE) {
+            ps2_log("vk: vkGetPhysicalDeviceSurfaceFormatsKHR failed (%d)", (int)r);
+            return -1;
         }
-        if (nf > 64) nf = 64;
     }
-    swap_format = fmts[0].format;
-    for (u32 i = 0; i < nf; i++)
+    if (nf == 0) return -1;
+    swap_format = VK_FORMAT_UNDEFINED;
+    for (u32 i = 0; i < nf; i++) {
+        if (fmts[i].colorSpace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) continue;
+        if (swap_format == VK_FORMAT_UNDEFINED) swap_format = fmts[i].format;
         if (fmts[i].format == VK_FORMAT_B8G8R8A8_UNORM) { swap_format = fmts[i].format; break; }
+    }
+    if (swap_format == VK_FORMAT_UNDEFINED) swap_format = fmts[0].format;
 
     memset(&ci, 0, sizeof(ci));
     ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;

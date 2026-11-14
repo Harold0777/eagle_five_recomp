@@ -120,12 +120,12 @@ target_include_directories(ac5 PRIVATE runtime/include "${GEN_DIR}"
                                        ${IMGUI_DIR} ${IMGUI_DIR}/backends
                                        ${SDL3_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
 target_link_directories(ac5 PRIVATE ${SDL3_LIBRARY_DIRS})
-target_link_libraries(ac5 PRIVATE Threads::Threads m
+target_link_libraries(ac5 PRIVATE Threads::Threads m ${CMAKE_DL_LIBS}
                                   ${SDL3_LIBRARIES} Vulkan::Vulkan lua54)
 target_link_options(ac5 PRIVATE -static-libstdc++ -static-libgcc)
 
 option(PS2_HOOK_ENTRIES "patchable entry sleds in generated code, for mod hooks" ON)
-set(GEN_COMPILE_OPTIONS "${GEN_OPT}")
+set(GEN_COMPILE_OPTIONS "${GEN_OPT}" "-DPS2_GENERATED_CODE=1")
 if(PS2_HOOK_ENTRIES)
   list(APPEND GEN_COMPILE_OPTIONS "-fpatchable-function-entry=8")
 endif()

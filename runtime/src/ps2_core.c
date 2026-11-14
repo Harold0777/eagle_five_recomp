@@ -254,11 +254,31 @@ void ps2_dispatch(ps2_ctx *ctx, u32 addr) {
     if (PS2_LIKELY(off < (ps2_text_hi - ps2_text_lo))) {
         ps2_fn f = ps2_fn_index[off >> 2];
         if (PS2_LIKELY(f != NULL)) {
+#if defined(__clang__)
+            f(ctx);
+            return;
+#else
             return f(ctx);
+#endif
         }
     }
     ps2_unknown_target(ctx, addr);
 }
+
+#if defined(__clang__)
+_Thread_local u32 ps2_dispatch_target;
+
+void ps2_dispatch_via(ps2_ctx *ctx) {
+    u32 addr = ps2_dispatch_target, off = addr - ps2_text_lo;
+    if (PS2_LIKELY(off < (ps2_text_hi - ps2_text_lo))) {
+        ps2_fn f = ps2_fn_index[off >> 2];
+        if (PS2_LIKELY(f != NULL)) {
+            PS2_TAIL return f(ctx);
+        }
+    }
+    ps2_unknown_target(ctx, addr);
+}
+#endif
 
 void ps2_div(ps2_reg128 *lo, ps2_reg128 *hi, int pipe, s32 a, s32 b) {
     s32 q, r;

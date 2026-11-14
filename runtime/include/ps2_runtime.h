@@ -28,7 +28,9 @@ typedef int64_t  s64;
 #  define PS2_NO_MUSTTAIL 1
 #endif
 
-#if defined(__GNUC__)
+#if defined(__clang__)
+#  define PS2_NOIPA __attribute__((noinline))
+#elif defined(__GNUC__)
 #  define PS2_NOIPA __attribute__((noipa))
 #else
 #  define PS2_NOIPA
@@ -357,6 +359,13 @@ void ps2_syscall(ps2_ctx *ctx);
 void ps2_trap(ps2_ctx *ctx, u32 insn);
 void ps2_unimplemented(ps2_ctx *ctx, u32 pc, u32 insn);
 void ps2_dispatch(ps2_ctx *ctx, u32 addr);
+#if defined(__clang__)
+extern _Thread_local u32 ps2_dispatch_target;
+void ps2_dispatch_via(ps2_ctx *ctx);
+#  ifdef PS2_GENERATED_CODE
+#    define ps2_dispatch(c, a) ps2_dispatch_via((ps2_dispatch_target = (a), (c)))
+#  endif
+#endif
 ps2_fn ps2_dispatch_lookup(u32 addr);
 int    ps2_dispatch_redirect(u32 addr, ps2_fn fn);
 void ps2_unknown_target(ps2_ctx *ctx, u32 addr);
