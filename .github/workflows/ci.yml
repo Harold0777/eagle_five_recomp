@@ -1,7 +1,17 @@
 name: ci
 on: [push, pull_request]
+
+permissions:
+  contents: read
+
+# A newer push to the same ref supersedes the run still in progress.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   linux:
+    name: linux (gcc 15, x86-64)
     runs-on: ubuntu-latest
     container: gcc:15
     steps:
@@ -10,5 +20,35 @@ jobs:
         run: apt-get update && apt-get install -y cmake pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
       - name: configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON
+      - name: build
+        run: cmake --build build --target gsreplay -j$(nproc)
+
+  linux-clang:
+    name: linux (clang, x86-64)
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: apt-get update && apt-get install -y cmake make clang pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
+      - name: configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+      - name: build
+        run: cmake --build build --target gsreplay -j$(nproc)
+
+  # Experimental: the VU code still uses x86 SSE intrinsics, so this job is
+  # expected to fail until ps2_vu.c is ported. It reports what breaks on ARM64
+  # without blocking the rest of the CI.
+  linux-arm64:
+    name: linux (clang, arm64, experimental)
+    runs-on: ubuntu-24.04-arm
+    container: debian:trixie
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: apt-get update && apt-get install -y cmake make clang pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
+      - name: configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
       - name: build
         run: cmake --build build --target gsreplay -j$(nproc)
