@@ -79,7 +79,11 @@ jobs:
           strip AppDir/usr/bin/gsreplay
           cp tools/ac5_launcher.py AppDir/usr/share/eagle_five/tools/
           
-          # CORREÇÃO: Copia o arquivo .ini padrão para as pastas que o launcher procura
+          # CORREÇÃO AQUI: Copia o .ini para a mesma pasta do executável 'ac5'
+          cp tools/ac5_settings.default.ini AppDir/usr/bin/ac5_settings.ini
+          cp tools/ac5_settings.default.ini AppDir/usr/bin/ac5_settings.default.ini
+          
+          # Mantém também em share por garantia
           cp tools/ac5_settings.default.ini AppDir/usr/share/eagle_five/tools/
           cp tools/ac5_settings.default.ini AppDir/usr/share/eagle_five/
           
