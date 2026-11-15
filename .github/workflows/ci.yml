@@ -22,6 +22,8 @@ jobs:
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON
       - name: build
         run: cmake --build build --target gsreplay -j$(nproc)
+      - name: smoke test (binary loads)
+        run: bash tools/smoke.sh
       - name: tests that need no game data
         run: python3 tools/test_patch.py && python3 tools/test_settings.py
 
@@ -37,11 +39,14 @@ jobs:
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
       - name: build
         run: cmake --build build --target gsreplay -j$(nproc)
+      - name: smoke test (binary loads)
+        run: bash tools/smoke.sh
       - name: tests that need no game data
         run: python3 tools/test_patch.py && python3 tools/test_settings.py
 
-  # ps2_vu.c falls back to its scalar path off x86 (see VU_SIMD), so this builds.
-  # It only proves the build: nothing here runs the game on ARM64.
+  # ps2_vu.c falls back to its scalar path off x86 (see VU_SIMD). The smoke
+  # test runs `gsreplay --novideo` on a missing capture to prove VU init
+  # reaches the replay stage without SIGILL. It does not emulate the VU.
   linux-arm64:
     name: linux (clang, arm64)
     runs-on: ubuntu-24.04-arm
@@ -54,5 +59,7 @@ jobs:
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
       - name: build
         run: cmake --build build --target gsreplay -j$(nproc)
+      - name: smoke test (binary loads)
+        run: bash tools/smoke.sh
       - name: tests that need no game data
         run: python3 tools/test_patch.py && python3 tools/test_settings.py
