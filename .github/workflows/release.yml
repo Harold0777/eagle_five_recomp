@@ -79,10 +79,13 @@ jobs:
           strip AppDir/usr/bin/gsreplay
           cp tools/ac5_launcher.py AppDir/usr/share/eagle_five/tools/
           
+          # CORREÇÃO: Copia o arquivo .ini padrão para as pastas que o launcher procura
+          cp tools/ac5_settings.default.ini AppDir/usr/share/eagle_five/tools/
+          cp tools/ac5_settings.default.ini AppDir/usr/share/eagle_five/
+          
           cp packaging/eagle_five.desktop AppDir/
           cp packaging/eagle_five.desktop AppDir/usr/share/applications/
           
-          # CORREÇÃO DEFINITIVA: Usa $APPDIR para não ter erro de caminho relativo
           cat > AppDir/usr/bin/ac5 << 'EOT'
           #!/bin/bash
           if [ -n "$APPDIR" ]; then
