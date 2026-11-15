@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    container: debian:trixie
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64
+            cc: clang
+            cxx: clang++
+          - os: ubuntu-24.04-arm
+            target: arm64
+            cc: clang
+            cxx: clang++
+
+    steps:
+      - uses: actions/checkout@v5
+      
+      - name: Install deps
+        run: |
+          apt-get update
+          apt-get install -y cmake make ${{ matrix.cc }} pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
+          
+      - name: Configure
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON 
+          -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+          
+      - name: Build
+        run: cmake --build build --target gsreplay -j$(nproc)
+        
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp build/gsreplay dist/
+          strip dist/gsreplay
+          
+          # Cria um LEIA-ME explicando as dependências de runtime
+          cat > dist/README.txt <<'EOT'
+          gsreplay (Linux ${{ matrix.target }})
+          
+          This binary is dynamically linked and requires the following host libraries:
+          - SDL3 (libsdl3)
+          - Vulkan Loader (libvulkan)
+          
+          Run with: ./gsreplay <capture.gscap> --novideo --bench
+          EOT
+          
+          tar -czvf gsreplay-linux-${{ matrix.target }}.tar.gz -C dist .
+          
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsreplay-linux-${{ matrix.target }}
+          path: gsreplay-linux-${{ matrix.target }}.tar.gz
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+          
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.tar.gz
+          generate_release_notes: true
+          draft: true
