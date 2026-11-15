@@ -15,6 +15,8 @@ void ps2_gs_write_reg(u32 reg, u64 val);
 void ps2_gs_priv_write(u32 addr, u64 val);
 int  ps2_gs_present(void);
 void ps2_vu1_init(void);
+int ps2_vu_selftest(void);
+int ps2_vif_selftest(void);
 void ps2_gif_transfer(const ps2_reg128 *data, u32 qwc);
 void ps2_vif_fifo(int which, const ps2_reg128 *q);
 void ps2_vif_transfer(int which, const ps2_reg128 *q, u32 qwc);
@@ -379,6 +381,7 @@ int main(int argc, char **argv) {
     g_cap_disable = 1;
     ps2_wall_seconds();
 
+    int want_vu_test = 0, want_vif_test = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--novideo")) want_video = 0;
         else if (!strcmp(argv[i], "--shot") && i + 1 < argc) shot = argv[++i];
@@ -397,6 +400,8 @@ int main(int argc, char **argv) {
                 fuzz_seed = (u32)strtoul(argv[++i], NULL, 0);
         }
         else if (argv[i][0] != '-') path = argv[i];
+        else if (!strcmp(argv[i], "--vu-test")) want_vu_test = 1;
+        else if (!strcmp(argv[i], "--vif-test")) want_vif_test = 1;
         else { usage(argv[0]); return strcmp(argv[i], "--help") ? 1 : 0; }
     }
 
@@ -405,6 +410,14 @@ int main(int argc, char **argv) {
 
     rn_dump_init();
     rn_vp_init();
+    if (want_vif_test || want_vu_test) {
+        ps2_mem_init();
+        ps2_gs_init();
+        ps2_vu1_init();
+        if (want_vif_test) return ps2_vif_selftest();
+        if (want_vu_test) return ps2_vu_selftest();
+    }
+
     rf = fopen(path, "rb");
     if (!rf) { fprintf(stderr, "[REPLAY] cannot open %s\n", path); return 1; }
     if (fread(&hdr, sizeof hdr, 1, rf) != 1
