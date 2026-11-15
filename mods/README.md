@@ -17,7 +17,7 @@ mods/
     params.txt                        the game's named values, changed by name
     widescreen.pnach                  PCSX2 patches (data patches work)
     symbols.txt                       names for functions
-    module.dll                        native code, only with native = true
+    module.dll / module.so            native code (Windows / Linux), only with native = true
 ```
 
 ## What a mod can change
@@ -156,11 +156,56 @@ their after-hooks rather than growing the stack; the run summary counts it.
 
 ## Native modules
 
-A DLL exporting `int ac5_mod_main(const ac5_api *api)` loads only when the
-mod's manifest says `native = true`. It is ordinary code in the game's process,
-so only enable it for mods you trust. Check `api->abi_version >=
-AC5_ABI_VERSION`: fields are only ever added. See
-`tests/mods/native_test/native_test.c`.
+A DLL (Windows) or shared object `.so` (Linux) exporting
+`int ac5_mod_main(const ac5_api *api)` loads only when the mod's manifest says
+`native = true`. Every `.dll` / `.so` in the mod's folder is loaded, in name
+order. It is ordinary code in the game's process, so only enable it for mods
+you trust. Check `api->abi_version >= AC5_ABI_VERSION`: fields are only ever
+added.
+
+Everything that attaches something (`on_frame`, `hook_before`, `on_shutdown`,
+...) returns a handle greater than 0, or -1 on failure; it does not return 0 on
+success. `ac5_mod_main` itself returns 0 when the mod loaded.
+
+A minimal Linux mod, which counts frames and hooks `scene_Dispatch`
+(`0x0031CF00`):
+
+```c
+#include <stdint.h>
+#include "ac5mod.h"           /* runtime/include/ac5mod.h */
+
+static const ac5_api *g_api;
+static unsigned g_frames;
+
+static void on_frame(ac5_ctx *ctx, void *user) {
+    (void)ctx; (void)user;
+    if (++g_frames == 300) g_api->log("300 frames seen");
+}
+
+static int before_dispatch(ac5_ctx *ctx, void *user) {
+    (void)ctx; (void)user;
+    return 0;
+}
+
+int ac5_mod_main(const ac5_api *api) {
+    if (api->abi_version < AC5_ABI_VERSION) return 1;
+    g_api = api;
+    if (api->on_frame(on_frame, 0) < 0) return 1;
+    if (api->hook_before(0x0031CF00u, before_dispatch, 0, 0) < 0) return 1;
+    return 0;
+}
+```
+
+Build it into the mod's folder and enable it:
+
+```bash
+gcc -shared -fPIC -O2 -I runtime/include -o mods/my_mod/my_mod.so my_mod.c
+printf 'name = "My Mod"\nnative = true\n' > mods/my_mod/mod.toml
+```
+
+Without `native = true` the game does not load the `.so` and the log says why
+(`mod: ... ships native code ... so it is not loaded`). The Linux loader was
+tested on x86-64 with GCC 16.
 
 ## mod.toml
 
@@ -172,7 +217,7 @@ version  = "1.0"
 author   = "someone"
 priority = 10            # higher wins every conflict; default 0
 enabled  = false         # switch it off without deleting it
-native   = true          # allow the DLLs in this directory to load
+native   = true          # allow the DLLs / .so files in this directory to load
 requires = "base_pack >= 1.2, helpers"
 abi      = 3             # the mod ABI it needs, at least
 game     = "SLUS-20851"
