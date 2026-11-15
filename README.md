@@ -289,7 +289,7 @@ The GitHub Actions workflow (.github/workflows/ci.yml) runs on every push and pu
     linux (clang, x86-64)
 
     linux (clang, arm64)
-
+```
 ## Credits
 
 - Original static recompilation: [sal063/Ace-Combat-5-Static-recompilation](https://github.com/sal063/Ace-Combat-5-Static-recompilation).
