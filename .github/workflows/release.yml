@@ -38,7 +38,7 @@ jobs:
       - name: Install deps
         run: |
           apt-get update
-          apt-get install -y cmake make ${{ matrix.cc }} pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
+          apt-get install -y cmake make ${{ matrix.cc }} pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc wget file libfuse2
           
       - name: Configure
         run: >
@@ -48,7 +48,7 @@ jobs:
       - name: Build
         run: cmake --build build --target gsreplay -j$(nproc)
         
-      - name: Package
+      - name: Package Tarball
         run: |
           mkdir -p dist
           cp build/gsreplay dist/
@@ -57,20 +57,56 @@ jobs:
           cat > dist/README.txt <<'EOT'
           gsreplay (Linux ${{ matrix.target }})
           
-          This binary is dynamically linked and requires the following host libraries:
-          - SDL3 (libsdl3)
-          - Vulkan Loader (libvulkan)
-          
+          Requires: SDL3 (libsdl3) and Vulkan Loader (libvulkan).
           Run with: ./gsreplay <capture.gscap> --novideo --bench
           EOT
           
           tar -czvf gsreplay-linux-${{ matrix.target }}.tar.gz -C dist .
           
-      - name: Upload Artifact
+      - name: Package AppImage (x86_64 only)
+        if: matrix.target == 'x86_64'
+        run: |
+          # Baixa o appimagetool
+          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O /usr/local/bin/appimagetool
+          chmod +x /usr/local/bin/appimagetool
+          
+          # Cria a estrutura do AppDir
+          mkdir -p AppDir/usr/bin
+          cp build/gsreplay AppDir/usr/bin/
+          strip AppDir/usr/bin/gsreplay
+          
+          # Cria o AppRun
+          cat > AppDir/AppRun << 'EOT'
+          #!/bin/bash
+          HERE=$(dirname "$(readlink -f "${0}")")
+          exec "${HERE}/usr/bin/gsreplay" "$@"
+          EOT
+          chmod +x AppDir/AppRun
+          
+          # Cria o arquivo .desktop
+          cat > AppDir/gsreplay.desktop << 'EOT'
+          [Desktop Entry]
+          Name=gsreplay
+          Exec=gsreplay
+          Icon=gsreplay
+          Type=Application
+          Categories=Utility;
+          EOT
+          
+          # Gera um ícone PNG 1x1 básico caso não exista um oficial
+          # (Se você tiver um ícone no repo, pode trocar por cp caminho/do/icone.png AppDir/gsreplay.png)
+          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > AppDir/gsreplay.png
+          
+          # Gera o AppImage
+          ARCH=x86_64 /usr/local/bin/appimagetool AppDir gsreplay-linux-x86_64.AppImage
+          
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: gsreplay-linux-${{ matrix.target }}
-          path: gsreplay-linux-${{ matrix.target }}.tar.gz
+          name: release-assets-${{ matrix.target }}
+          path: |
+            gsreplay-linux-${{ matrix.target }}.tar.gz
+            gsreplay-linux-${{ matrix.target }}.AppImage
 
   release:
     name: Create Release
@@ -86,8 +122,7 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          # Se for manual, usa o input. Se for por tag, usa a tag do Git.
           tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
-          files: artifacts/*.tar.gz
+          files: artifacts/*
           generate_release_notes: true
           draft: true
