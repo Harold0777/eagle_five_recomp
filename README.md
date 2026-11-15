@@ -25,12 +25,15 @@ on Linux systems:
   they reach the GPU queue. Cuts ~50% of texture upload bytes in typical scenes.
 - **Texture cache cleanup** — tighter VRAM management; fewer cache invalidations.
 - **VBlank synchronization** — replaced busy-wait loops with condition variables,
-  reducing CPU usage during idle frames and improving frame pacing.
+  reducing CPU usage during idle frames and improving frame pacing. Reads of `INTC_STAT`
+  that spin on the vblank bit also sleep until the next vblank (merged from upstream).
+  Set `PS2_VSYNC_SLEEP=0` to turn that spin detection off.
 - **VU1 recompilation** — all VU1 microprograms used by the game are lifted to C
   ahead of time (100% coverage). See [Recent updates](#recent-updates).
 - **GS draw state cache** — 256-slot direct-mapped cache; hit rate up from 45% to 88%.
 - **EAGLE FIVE launcher (Qt6 / PySide6)** — graphical settings editor with ISO validation,
-  preset management, save backup/restore, and integrated console.
+  preset management, keyboard and gamepad mapping editor (live gamepad capture through
+  SDL3), save backup/restore, and integrated console. The launcher UI is in Portuguese.
 
 ---
 
@@ -52,6 +55,13 @@ Build dependencies:
 - Vulkan SDK (for `glslc`)
 - Python 3.10+ (for the recompiler and launcher)
 - PySide6 (for the launcher)
+- `bsdtar` (libarchive) or `7z` (p7zip), to extract the game executable from the ISO
+
+On Arch / CachyOS:
+
+```bash
+sudo pacman -S --needed base-devel cmake sdl3 vulkan-headers vulkan-icd-loader shaderc libarchive python
+```
 
 ---
 
@@ -61,13 +71,28 @@ Build dependencies:
 git clone https://github.com/Harold0777/eagle_five_recomp.git
 cd eagle_five_recomp
 
-# 1. Recompile the game ISO into C source (one-time, ~30 min)
-python3 -m ps2recomp /path/to/AC5.iso -o generated
+# 1. Extract the game executable from your ISO
+bsdtar -xf /path/to/AC5.iso SLUS_208.51      # or: 7z e /path/to/AC5.iso SLUS_208.51
 
-# 2. Configure and build
+# 2. Recompile it into C source (one-time, about 20 seconds)
+PYTHONPATH=tools python3 -m ps2recomp SLUS_208.51 -o generated \
+  --ida-db config/ida_db.json --ida-seeds config/ida_seeds.json \
+  --symbols config/sdk_symbols.json --symbols config/manual_symbols.json \
+  --overrides config/overrides.json --hooks config/hooks.json \
+  --report /tmp/report.json
+
+# 3. Configure and build
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 ```
+
+The recompiler takes the game executable (`SLUS_208.51`), not the ISO. When it
+finishes it should report 10742 functions in 43 files with 98.04% of `.text`
+covered, the same numbers as `config/report.json`. If yours differ, something is
+wrong with the inputs.
+
+The generated sources are derived from the game, so `generated/` is gitignored
+(except `ps2_vu1_progs.inc`). Never commit it, the ISO or `SLUS_208.51`.
 
 ---
 
@@ -186,9 +211,9 @@ The High preset uses 4x. No fix is currently planned.
 
 ## Downloads and AppImage
 
-Two builds are available on the [v0.3.0 release page](https://github.com/Harold0777/eagle_five_recomp/releases/tag/v0.3.0):
+Two builds are published on the [latest release page](https://github.com/Harold0777/eagle_five_recomp/releases/latest):
 
-- [`ac5-recomp-v0.3.0-linux-x86_64.tar.gz`](https://github.com/Harold0777/eagle_five_recomp/releases/download/v0.3.0/ac5-recomp-v0.3.0-linux-x86_64.tar.gz): portable tarball.
+- `ac5-recomp-linux-x86_64-<version>.tar.gz` (with a `.sha256` file): portable tarball.
 - `EagleFive-x86_64.AppImage`: single file with the graphical launcher (`tools/ac5_launcher.py`).
 
 Neither build includes the game. You need your own legally dumped ISO of Ace Combat 5 (USA, `SLUS_208.51`).
@@ -221,3 +246,11 @@ Needs the generated sources (`generated/`), GCC 15+ or Clang 13+, SDL3 and the V
 ```bash
 ./tools/make_appimage.sh
 ```
+
+## Credits
+
+- Original static recompilation: [sal063/Ace-Combat-5-Static-recompilation](https://github.com/sal063/Ace-Combat-5-Static-recompilation).
+  This fork has merged upstream up to commit `625ac19` ("Performence overhaul": INTC_STAT spin
+  detection, Clang dispatch path, Linux hooks and native `.so` mods, sRGB swapchain format).
+- Ace Combat 5: The Unsung War is a trademark and work of Bandai Namco. This project contains
+  no game data and requires your own legally dumped copy.

@@ -37,7 +37,6 @@ else
 fi
 
 [ -f "$ROOT/tools/ac5_launcher.py" ] || { echo "[!] Launcher nao encontrado"; exit 1; }
-[ -f "$ROOT/generated/ps2_image.bin" ] || { echo "[!] generated/ps2_image.bin nao encontrado"; exit 1; }
 
 # --- staging ---
 rm -rf "$STAGE"
@@ -51,9 +50,8 @@ chmod +x "$STAGE/ac5"
 cp "$ROOT/tools/ac5_launcher.py" "$STAGE/tools/"
 chmod +x "$STAGE/tools/ac5_launcher.py"
 
-# Dados de runtime (essencial: ps2_image.bin)
-cp "$ROOT/generated/ps2_image.bin" "$STAGE/generated/"
-echo "[+] Generated: ps2_image.bin ($(du -h "$STAGE/generated/ps2_image.bin" | cut -f1))"
+# ps2_image.bin e a imagem em memoria do executavel do jogo: NAO vai no pacote.
+# O usuario gera a partir da propria ISO (tools/make_image.py ou o launcher).
 
 # Shaders compilados
 if [ -d "$BUILD/shaders" ]; then
@@ -79,6 +77,12 @@ cd "$(dirname "$0")"
 exec python3 tools/ac5_launcher.py "$@"
 EOF2
 chmod +x "$STAGE/run.sh"
+
+# --- trava: nada derivado do jogo pode ir no pacote ---
+if find "$STAGE" \( -iname 'ps2_image*' -o -iname 'SLUS_*' -o -iname '*.iso' \) | grep -q .; then
+    echo "[!] O pacote contem arquivos derivados do jogo. Abortando."
+    exit 1
+fi
 
 # --- gerar tar + sha256 ---
 cd "$DIST"
