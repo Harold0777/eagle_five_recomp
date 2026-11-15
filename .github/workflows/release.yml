@@ -38,7 +38,7 @@ jobs:
       - name: Install deps
         run: |
           apt-get update
-          apt-get install -y cmake make ${{ matrix.cc }} pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc wget file libfuse2
+          apt-get install -y cmake make ${{ matrix.cc }} pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc wget file
           
       - name: Configure
         run: >
@@ -67,15 +67,17 @@ jobs:
         if: matrix.target == 'x86_64'
         run: |
           # Baixa o appimagetool
-          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O /usr/local/bin/appimagetool
-          chmod +x /usr/local/bin/appimagetool
+          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool.AppImage
+          chmod +x appimagetool.AppImage
+          
+          # Extrai o appimagetool para burlar a falta de FUSE no container
+          ./appimagetool.AppImage --appimage-extract > /dev/null
           
           # Cria a estrutura do AppDir
           mkdir -p AppDir/usr/bin
           cp build/gsreplay AppDir/usr/bin/
           strip AppDir/usr/bin/gsreplay
           
-          # Cria o AppRun
           cat > AppDir/AppRun << 'EOT'
           #!/bin/bash
           HERE=$(dirname "$(readlink -f "${0}")")
@@ -83,7 +85,6 @@ jobs:
           EOT
           chmod +x AppDir/AppRun
           
-          # Cria o arquivo .desktop
           cat > AppDir/gsreplay.desktop << 'EOT'
           [Desktop Entry]
           Name=gsreplay
@@ -93,12 +94,11 @@ jobs:
           Categories=Utility;
           EOT
           
-          # Gera um ícone PNG 1x1 básico caso não exista um oficial
-          # (Se você tiver um ícone no repo, pode trocar por cp caminho/do/icone.png AppDir/gsreplay.png)
+          # Ícone padrão transparente
           echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > AppDir/gsreplay.png
           
-          # Gera o AppImage
-          ARCH=x86_64 /usr/local/bin/appimagetool AppDir gsreplay-linux-x86_64.AppImage
+          # Roda o appimagetool extraído (sem FUSE)
+          ARCH=x86_64 ./squashfs-root/AppRun AppDir gsreplay-linux-x86_64.AppImage
           
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
