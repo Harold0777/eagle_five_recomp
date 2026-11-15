@@ -17,11 +17,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: deps
-        run: apt-get update && apt-get install -y cmake pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
+        run: apt-get update && apt-get install -y cmake pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc python3
       - name: configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON
       - name: build
         run: cmake --build build --target gsreplay -j$(nproc)
+      - name: tests that need no game data
+        run: python3 tools/test_patch.py && python3 tools/test_settings.py
 
   linux-clang:
     name: linux (clang, x86-64)
@@ -30,25 +32,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: deps
-        run: apt-get update && apt-get install -y cmake make clang pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
+        run: apt-get update && apt-get install -y cmake make clang gcc python3 pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
       - name: configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
       - name: build
         run: cmake --build build --target gsreplay -j$(nproc)
+      - name: tests that need no game data
+        run: python3 tools/test_patch.py && python3 tools/test_settings.py
 
-  # Experimental: the VU code still uses x86 SSE intrinsics, so this job is
-  # expected to fail until ps2_vu.c is ported. It reports what breaks on ARM64
-  # without blocking the rest of the CI.
+  # ps2_vu.c falls back to its scalar path off x86 (see VU_SIMD), so this builds.
+  # It only proves the build: nothing here runs the game on ARM64.
   linux-arm64:
-    name: linux (clang, arm64, experimental)
+    name: linux (clang, arm64)
     runs-on: ubuntu-24.04-arm
     container: debian:trixie
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: deps
-        run: apt-get update && apt-get install -y cmake make clang pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
+        run: apt-get update && apt-get install -y cmake make clang gcc python3 pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
       - name: configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
       - name: build
         run: cmake --build build --target gsreplay -j$(nproc)
+      - name: tests that need no game data
+        run: python3 tools/test_patch.py && python3 tools/test_settings.py
