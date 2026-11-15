@@ -12,10 +12,10 @@ concurrency:
 jobs:
   linux:
     name: linux (gcc 15, x86-64)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container: gcc:15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: deps
         run: apt-get update && apt-get install -y cmake pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc python3
       - name: configure
@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     container: debian:trixie
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: deps
         run: apt-get update && apt-get install -y cmake make clang gcc python3 pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
       - name: configure
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     container: debian:trixie
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: deps
         run: apt-get update && apt-get install -y cmake make clang gcc python3 pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
       - name: configure

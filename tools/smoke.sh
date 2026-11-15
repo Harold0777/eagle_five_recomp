@@ -13,8 +13,8 @@ if [ -z "$BIN" ]; then
   find build -name 'gsreplay*' || true
   exit 1
 fi
+echo "runner arch: $(uname -m)"
 echo "binary: $BIN"
-command -v file >/dev/null && file "$BIN" || true
 
 if ldd "$BIN" 2>/dev/null | grep -q "not found"; then
   echo "FAIL: missing shared libraries:"
@@ -44,8 +44,11 @@ if ! grep -q "usage:" "$LOG"; then echo "FAIL: --help did not print usage"; exit
 run novideo "$BIN" --novideo /tmp/gsreplay-smoke-no-such.gscap
 if [ "$RC" -ne 1 ]; then echo "FAIL: --novideo with missing capture exited $RC (expected 1)"; exit 1; fi
 if ! grep -qi "cannot open" "$LOG"; then echo "FAIL: --novideo did not report the missing capture"; exit 1; fi
+# O VU init deve rodar antes do erro de capture. Se não aparecer, o fallback
+# escalar não foi exercitado (ou quebrou silenciosamente).
 if ! grep -q "VU1" "$LOG"; then
-  echo "WARN: startup log did not mention VU1; VU init may not have run"
+  echo "FAIL: startup log did not mention VU1; VU init did not run"
+  exit 1
 fi
 
 echo "OK: gsreplay smoke test passed"
