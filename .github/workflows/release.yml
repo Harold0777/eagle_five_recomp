@@ -39,7 +39,6 @@ jobs:
         run: |
           apt-get update
           apt-get install -y cmake make ${{ matrix.cc }} pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc wget file
-          # Instala o Python e o PyQt6 para o launcher funcionar no CI
           apt-get install -y python3 python3-pyqt6
           
       - name: Configure
@@ -72,28 +71,28 @@ jobs:
           chmod +x appimagetool.AppImage
           ./appimagetool.AppImage --appimage-extract > /dev/null
           
-          # Recria a estrutura de pastas exata do seu AppDir antigo
           mkdir -p AppDir/usr/bin
           mkdir -p AppDir/usr/share/eagle_five/tools
           mkdir -p AppDir/usr/share/applications
           
-          # Copia os binários e scripts
           cp build/gsreplay AppDir/usr/bin/
           strip AppDir/usr/bin/gsreplay
           cp tools/ac5_launcher.py AppDir/usr/share/eagle_five/tools/
           
-          # Copia o .desktop para o root do AppDir (obrigatório) e para o share/applications
           cp packaging/eagle_five.desktop AppDir/
           cp packaging/eagle_five.desktop AppDir/usr/share/applications/
           
-          # Cria o wrapper 'ac5' que o .desktop chama
+          # CORREÇÃO: O wrapper 'ac5' agora usa caminhos relativos ao próprio script
           cat > AppDir/usr/bin/ac5 << 'EOT'
           #!/bin/bash
-          exec python3 /usr/share/eagle_five/tools/ac5_launcher.py "$@"
+          # Descobre onde este script está (AppDir/usr/bin)
+          BIN_DIR=$(dirname "$(readlink -f "${0}")")
+          # Sobe dois níveis para chegar no AppDir raiz e entra em usr/share/...
+          LAUNCHER="${BIN_DIR}/../../share/eagle_five/tools/ac5_launcher.py"
+          exec python3 "${LAUNCHER}" "$@"
           EOT
           chmod +x AppDir/usr/bin/ac5
           
-          # Cria o AppRun que inicializa o ambiente e chama o wrapper
           cat > AppDir/AppRun << 'EOT'
           #!/bin/bash
           HERE=$(dirname "$(readlink -f "${0}")")
@@ -103,13 +102,11 @@ jobs:
           EOT
           chmod +x AppDir/AppRun
           
-          # Tenta achar o ícone do launcher (procura na pasta packaging ou assets)
           if [ -f "packaging/eagle_five.png" ]; then
             cp packaging/eagle_five.png AppDir/eagle_five.png
           elif [ -f "assets/eagle_five.png" ]; then
             cp assets/eagle_five.png AppDir/eagle_five.png
           else
-            # Fallback transparente
             echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > AppDir/eagle_five.png
           fi
           
