@@ -247,6 +247,49 @@ Needs the generated sources (`generated/`), GCC 15+ or Clang 13+, SDL3 and the V
 ./tools/make_appimage.sh
 ```
 
+
+## Testing and CI
+
+The project includes self-tests for the core emulation components, which can be run locally without needing a game disc or capture.
+
+### Built-in Self-Tests
+
+The `gsreplay` binary can execute mathematical and pipeline self-tests for the VU (Vector Unit) and VIF (VPU Interface):
+
+```bash
+./build/gsreplay --vu-test
+./build/gsreplay --vif-test
+
+These tests validate the behavior of the flag pipeline, Q/P register latency, and unpacking logic. They exit with code 0 on success and 1 on failure (printing the specific failure to stdout).
+
+Crucially, these tests run the same instruction sequences on both the x86 (SSE) fast path and the ARM64 (scalar) fallback path, guaranteeing that the emulation math is identical across architectures.
+Smoke Test Script
+
+A comprehensive smoke test script is available at tools/smoke.sh. It is the exact script executed by the GitHub Actions CI. It validates:
+
+    The binary is a valid ELF for the current architecture and resolves its shared libraries.
+
+    --help reaches the parser correctly.
+
+    --novideo gets past VU initialization without a SIGILL (especially important for ARM64).
+
+    The VU and VIF self-tests pass mathematically.
+
+To run it locally (requires the build directory to be populated):
+bash
+
+bash tools/smoke.sh
+
+CI Pipeline
+
+The GitHub Actions workflow (.github/workflows/ci.yml) runs on every push and pull request, compiling and testing the code on:
+
+    linux (gcc 15, x86-64)
+
+    linux (clang, x86-64)
+
+    linux (clang, arm64)
+
 ## Credits
 
 - Original static recompilation: [sal063/Ace-Combat-5-Static-recompilation](https://github.com/sal063/Ace-Combat-5-Static-recompilation).
