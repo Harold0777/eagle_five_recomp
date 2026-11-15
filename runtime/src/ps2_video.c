@@ -2939,8 +2939,8 @@ static void ov_bbox(const vk_draw *d, s32 *x0, s32 *y0, s32 *x1, s32 *y1) {
     *y0 = by0 < 0.0f ? 0 : (s32)by0 / OV_CELL;
     *x1 = bx1 < 0.0f ? -1 : (s32)bx1 / OV_CELL;
     *y1 = by1 < 0.0f ? -1 : (s32)by1 / OV_CELL;
-    if (*x1 >= OV_CW) *x1 = OV_CW - 1;
-    if (*y1 >= OV_CH) *y1 = OV_CH - 1;
+    if (*x1 >= (s32)OV_CW) *x1 = OV_CW - 1;
+    if (*y1 >= (s32)OV_CH) *y1 = OV_CH - 1;
 }
 
 static int ov_colourless(const vk_draw *d) {
