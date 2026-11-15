@@ -82,13 +82,15 @@ jobs:
           cp packaging/eagle_five.desktop AppDir/
           cp packaging/eagle_five.desktop AppDir/usr/share/applications/
           
-          # CORREÇÃO: O wrapper 'ac5' agora usa caminhos relativos ao próprio script
+          # CORREÇÃO DEFINITIVA: Usa $APPDIR para não ter erro de caminho relativo
           cat > AppDir/usr/bin/ac5 << 'EOT'
           #!/bin/bash
-          # Descobre onde este script está (AppDir/usr/bin)
-          BIN_DIR=$(dirname "$(readlink -f "${0}")")
-          # Sobe dois níveis para chegar no AppDir raiz e entra em usr/share/...
-          LAUNCHER="${BIN_DIR}/../../share/eagle_five/tools/ac5_launcher.py"
+          if [ -n "$APPDIR" ]; then
+              LAUNCHER="$APPDIR/usr/share/eagle_five/tools/ac5_launcher.py"
+          else
+              BIN_DIR=$(dirname "$(readlink -f "${0}")")
+              LAUNCHER="${BIN_DIR}/../share/eagle_five/tools/ac5_launcher.py"
+          fi
           exec python3 "${LAUNCHER}" "$@"
           EOT
           chmod +x AppDir/usr/bin/ac5
