@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name for the release (e.g., v1.0.0-manual)'
+        description: 'Tag name for the release'
         required: true
         default: 'v0.0.0-manual'
 
@@ -39,6 +39,8 @@ jobs:
         run: |
           apt-get update
           apt-get install -y cmake make ${{ matrix.cc }} pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc wget file
+          # Instala o Python e o PyQt6 para o launcher funcionar no CI
+          apt-get install -y python3 python3-pyqt6
           
       - name: Configure
         run: >
@@ -55,58 +57,71 @@ jobs:
           strip dist/gsreplay
           
           cat > dist/README.txt <<'EOT'
-          gsreplay (Linux ${{ matrix.target }})
+          Eagle Five (Linux ${{ matrix.target }})
           
           Requires: SDL3 (libsdl3) and Vulkan Loader (libvulkan).
           Run with: ./gsreplay <capture.gscap> --novideo --bench
           EOT
           
-          tar -czvf gsreplay-linux-${{ matrix.target }}.tar.gz -C dist .
+          tar -czvf eagle-five-linux-${{ matrix.target }}.tar.gz -C dist .
           
       - name: Package AppImage (x86_64 only)
         if: matrix.target == 'x86_64'
         run: |
-          # Baixa o appimagetool
           wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool.AppImage
           chmod +x appimagetool.AppImage
-          
-          # Extrai o appimagetool para burlar a falta de FUSE no container
           ./appimagetool.AppImage --appimage-extract > /dev/null
           
-          # Cria a estrutura do AppDir
+          # Recria a estrutura de pastas exata do seu AppDir antigo
           mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/eagle_five/tools
+          mkdir -p AppDir/usr/share/applications
+          
+          # Copia os binários e scripts
           cp build/gsreplay AppDir/usr/bin/
           strip AppDir/usr/bin/gsreplay
+          cp tools/ac5_launcher.py AppDir/usr/share/eagle_five/tools/
           
+          # Copia o .desktop para o root do AppDir (obrigatório) e para o share/applications
+          cp packaging/eagle_five.desktop AppDir/
+          cp packaging/eagle_five.desktop AppDir/usr/share/applications/
+          
+          # Cria o wrapper 'ac5' que o .desktop chama
+          cat > AppDir/usr/bin/ac5 << 'EOT'
+          #!/bin/bash
+          exec python3 /usr/share/eagle_five/tools/ac5_launcher.py "$@"
+          EOT
+          chmod +x AppDir/usr/bin/ac5
+          
+          # Cria o AppRun que inicializa o ambiente e chama o wrapper
           cat > AppDir/AppRun << 'EOT'
           #!/bin/bash
           HERE=$(dirname "$(readlink -f "${0}")")
-          exec "${HERE}/usr/bin/gsreplay" "$@"
+          export PATH="${HERE}/usr/bin:${PATH}"
+          export APPDIR="${HERE}"
+          exec "${HERE}/usr/bin/ac5" "$@"
           EOT
           chmod +x AppDir/AppRun
           
-          cat > AppDir/gsreplay.desktop << 'EOT'
-          [Desktop Entry]
-          Name=gsreplay
-          Exec=gsreplay
-          Icon=gsreplay
-          Type=Application
-          Categories=Utility;
-          EOT
+          # Tenta achar o ícone do launcher (procura na pasta packaging ou assets)
+          if [ -f "packaging/eagle_five.png" ]; then
+            cp packaging/eagle_five.png AppDir/eagle_five.png
+          elif [ -f "assets/eagle_five.png" ]; then
+            cp assets/eagle_five.png AppDir/eagle_five.png
+          else
+            # Fallback transparente
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > AppDir/eagle_five.png
+          fi
           
-          # Ícone padrão transparente
-          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > AppDir/gsreplay.png
-          
-          # Roda o appimagetool extraído (sem FUSE)
-          ARCH=x86_64 ./squashfs-root/AppRun AppDir gsreplay-linux-x86_64.AppImage
+          ARCH=x86_64 ./squashfs-root/AppRun AppDir eagle-five-linux-x86_64.AppImage
           
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-assets-${{ matrix.target }}
           path: |
-            gsreplay-linux-${{ matrix.target }}.tar.gz
-            gsreplay-linux-${{ matrix.target }}.AppImage
+            eagle-five-linux-${{ matrix.target }}.tar.gz
+            eagle-five-linux-${{ matrix.target }}.AppImage
 
   release:
     name: Create Release
