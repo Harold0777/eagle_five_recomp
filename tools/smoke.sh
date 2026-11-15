@@ -54,6 +54,12 @@ if ! grep -q "VU1" "$LOG"; then
   exit 1
 fi
 
+# Replay of a synthetic empty capture. Exercises state loading and the
+# software rasterizer (since --novideo forces it) on ARM64.
+run replay-empty "$BIN" --novideo tests/fixtures/empty.gscap --fields 1
+if [ "$RC" -ne 0 ]; then echo "FAIL: --novideo with empty capture exited $RC"; exit 1; fi
+if ! grep -q "framebuffer written" "$LOG"; then echo "FAIL: replay did not write framebuffer"; exit 1; fi
+
 # VU and VIF mathematical self-tests.
 # Crucial for ARM64: this proves the scalar fallback matches the SSE path.
 MAX_LINES=100 run vu-test "$BIN" --vu-test
