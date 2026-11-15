@@ -1,22 +1,25 @@
-name: Release
+name: gsreplay binaries
+
+# This workflow only builds gsreplay (the replay / benchmark tool) for x86-64 and
+# ARM64. It does NOT build the playable game or the AppImage: both need
+# generated/, which is derived from the game and cannot exist in CI.
+# Playable releases are built locally:
+#   bash tools/make_appimage.sh      # EagleFive-x86_64.AppImage
+#   bash tools/package.sh vX.Y.Z     # portable tarball
+# and published with `gh release create`.
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      tag_name:
-        description: 'Tag name for the release'
-        required: true
-        default: 'v0.0.0-manual'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
-    name: Build ${{ matrix.target }}
+  gsreplay:
+    name: gsreplay (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     container: debian:trixie
     strategy:
@@ -25,125 +28,36 @@ jobs:
         include:
           - os: ubuntu-24.04
             target: x86_64
-            cc: clang
-            cxx: clang++
           - os: ubuntu-24.04-arm
             target: arm64
-            cc: clang
-            cxx: clang++
-
     steps:
       - uses: actions/checkout@v5
-      
-      - name: Install deps
-        run: |
-          apt-get update
-          apt-get install -y cmake make ${{ matrix.cc }} pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc wget file
-          apt-get install -y python3 python3-pyqt6
-          
-      - name: Configure
-        run: >
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON 
-          -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
-          
-      - name: Build
+
+      - name: deps
+        run: apt-get update && apt-get install -y cmake make clang pkg-config libvulkan-dev glslang-tools libsdl3-dev glslc
+
+      - name: configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DPS2_RUNTIME_ONLY=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+
+      - name: build
         run: cmake --build build --target gsreplay -j$(nproc)
-        
-      - name: Package Tarball
+
+      - name: package
         run: |
           mkdir -p dist
           cp build/gsreplay dist/
           strip dist/gsreplay
-          
           cat > dist/README.txt <<'EOT'
-          Eagle Five (Linux ${{ matrix.target }})
-          
-          Requires: SDL3 (libsdl3) and Vulkan Loader (libvulkan).
-          Run with: ./gsreplay <capture.gscap> --novideo --bench
-          EOT
-          
-          tar -czvf eagle-five-linux-${{ matrix.target }}.tar.gz -C dist .
-          
-      - name: Package AppImage (x86_64 only)
-        if: matrix.target == 'x86_64'
-        run: |
-          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool.AppImage
-          chmod +x appimagetool.AppImage
-          ./appimagetool.AppImage --appimage-extract > /dev/null
-          
-          mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/share/eagle_five/tools
-          mkdir -p AppDir/usr/share/applications
-          
-          cp build/gsreplay AppDir/usr/bin/
-          strip AppDir/usr/bin/gsreplay
-          cp tools/ac5_launcher.py AppDir/usr/share/eagle_five/tools/
-          
-          # CORREÇÃO AQUI: Copia o .ini para a mesma pasta do executável 'ac5'
-          cp tools/ac5_settings.default.ini AppDir/usr/bin/ac5_settings.ini
-          cp tools/ac5_settings.default.ini AppDir/usr/bin/ac5_settings.default.ini
-          
-          # Mantém também em share por garantia
-          cp tools/ac5_settings.default.ini AppDir/usr/share/eagle_five/tools/
-          cp tools/ac5_settings.default.ini AppDir/usr/share/eagle_five/
-          
-          cp packaging/eagle_five.desktop AppDir/
-          cp packaging/eagle_five.desktop AppDir/usr/share/applications/
-          
-          cat > AppDir/usr/bin/ac5 << 'EOT'
-          #!/bin/bash
-          if [ -n "$APPDIR" ]; then
-              LAUNCHER="$APPDIR/usr/share/eagle_five/tools/ac5_launcher.py"
-          else
-              BIN_DIR=$(dirname "$(readlink -f "${0}")")
-              LAUNCHER="${BIN_DIR}/../share/eagle_five/tools/ac5_launcher.py"
-          fi
-          exec python3 "${LAUNCHER}" "$@"
-          EOT
-          chmod +x AppDir/usr/bin/ac5
-          
-          cat > AppDir/AppRun << 'EOT'
-          #!/bin/bash
-          HERE=$(dirname "$(readlink -f "${0}")")
-          export PATH="${HERE}/usr/bin:${PATH}"
-          export APPDIR="${HERE}"
-          exec "${HERE}/usr/bin/ac5" "$@"
-          EOT
-          chmod +x AppDir/AppRun
-          
-          if [ -f "packaging/eagle_five.png" ]; then
-            cp packaging/eagle_five.png AppDir/eagle_five.png
-          elif [ -f "assets/eagle_five.png" ]; then
-            cp assets/eagle_five.png AppDir/eagle_five.png
-          else
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" | base64 -d > AppDir/eagle_five.png
-          fi
-          
-          ARCH=x86_64 ./squashfs-root/AppRun AppDir eagle-five-linux-x86_64.AppImage
-          
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-assets-${{ matrix.target }}
-          path: |
-            eagle-five-linux-${{ matrix.target }}.tar.gz
-            eagle-five-linux-${{ matrix.target }}.AppImage
+          gsreplay (replay / benchmark tool), Linux ${{ matrix.target }}
 
-  release:
-    name: Create Release
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
+          This is NOT the playable game and has no launcher. For the game, use the
+          AppImage or the portable tarball published on the Releases page.
+          Requires: SDL3 and the Vulkan loader.
+          Usage: ./gsreplay <capture.gscap> --novideo --bench
+          EOT
+          tar -czf gsreplay-linux-${{ matrix.target }}.tar.gz -C dist .
+
+      - uses: actions/upload-artifact@v4
         with:
-          path: artifacts
-          merge-multiple: true
-          
-      - name: Publish Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
-          files: artifacts/*
-          generate_release_notes: true
-          draft: true
+          name: gsreplay-linux-${{ matrix.target }}
+          path: gsreplay-linux-${{ matrix.target }}.tar.gz
