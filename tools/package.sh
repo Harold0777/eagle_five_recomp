@@ -18,9 +18,11 @@ fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-BUILD="$ROOT/build"
+BUILD="${BUILD_DIR:-$ROOT/build}"
+case "$BUILD" in /*) ;; *) BUILD="$ROOT/$BUILD" ;; esac
 DIST="$ROOT/dist"
-NAME="ac5-recomp-linux-x86_64-$VERSION"
+ARCH="${ARCH:-x86_64}"   # x86_64 (padrão) ou aarch64
+NAME="ac5-recomp-linux-$ARCH-$VERSION"
 STAGE="$DIST/$NAME"
 
 echo "[+] Versao: $VERSION"
@@ -37,6 +39,16 @@ else
 fi
 
 [ -f "$ROOT/tools/ac5_launcher.py" ] || { echo "[!] Launcher nao encontrado"; exit 1; }
+
+# --- o binario precisa ser da arquitetura pedida ---
+case "$ARCH" in
+    x86_64)  WANT="x86-64" ;;
+    aarch64) WANT="ARM aarch64" ;;
+    *) echo "[!] ARCH desconhecida: $ARCH (use x86_64 ou aarch64)"; exit 1 ;;
+esac
+if command -v file >/dev/null 2>&1; then
+    file -L "$BIN" | grep -q "$WANT" || { echo "[!] $BIN nao e $ARCH: $(file -L "$BIN")"; exit 1; }
+fi
 
 # --- staging ---
 rm -rf "$STAGE"
@@ -77,6 +89,17 @@ cd "$(dirname "$0")"
 exec python3 tools/ac5_launcher.py "$@"
 EOF2
 chmod +x "$STAGE/run.sh"
+
+# Arquiteturas fora do x86-64 sao experimentais
+if [ "$ARCH" != "x86_64" ]; then
+    cat > "$STAGE/EXPERIMENTAL.txt" <<'EOF3'
+This ARM64 build is experimental.
+- Built with clang for aarch64; not tested on ARM64 hardware or with a GPU.
+- The hook layer is x86-64 only: render taps, the sun flare fix and hook-based mods are disabled.
+- VU1 uses a scalar path (no SIMD).
+- Needs SDL3, Vulkan and (for the launcher) Python 3 with PySide6.
+EOF3
+fi
 
 # --- trava: nada derivado do jogo pode ir no pacote ---
 if find "$STAGE" \( -iname 'ps2_image*' -o -iname 'SLUS_*' -o -iname '*.iso' \) | grep -q .; then
