@@ -40,6 +40,17 @@ fi
 
 [ -f "$ROOT/tools/ac5_launcher.py" ] || { echo "[!] Launcher nao encontrado"; exit 1; }
 
+# --- o binario nao pode ser mais antigo que o ultimo commit do runtime ---
+if [ -z "${ALLOW_STALE:-}" ] && git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    LAST="$(git -C "$ROOT" log -1 --format=%ct -- runtime third_party CMakeLists.txt config)"
+    if [ -n "$LAST" ] && [ "$(stat -c %Y "$BIN")" -lt "$LAST" ]; then
+        echo "[!] $BIN e mais antigo que o ultimo commit em runtime/ (nao tem o codigo atual)."
+        echo "    Recompile (ex.: bash tools/make_appimage.sh e use BUILD_DIR=build-appimage)"
+        echo "    ou force com ALLOW_STALE=1."
+        exit 1
+    fi
+fi
+
 # --- o binario precisa ser da arquitetura pedida ---
 case "$ARCH" in
     x86_64)  WANT="x86-64" ;;
