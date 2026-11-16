@@ -189,6 +189,20 @@ One 125 s session at internal resolution 2, 1920x1080, present mode immediate: 7
 
 Caveats: a single capture and a single session. Gains on other game phases or other hardware may differ.
 
+### Upstream merge A/B
+
+Measured on a different machine (Xeon E5-2690 v4, Radeon RX 7600, CachyOS, GCC 16.2.1): the build
+with upstream `625ac19` merged against the previous `main`, two alternating 120 s rounds of the game's
+opening sequence with no input.
+
+- Both builds ran at 59.9 fields/s with 2 to 4 dropped fields, using about 51% CPU summed over all
+  threads. The EE practically never waited on the graphics ring, so this machine is not CPU-bound.
+- The merge costs about +0.35 s of system time per run, consistently.
+- `PS2_VSYNC_SLEEP=0` changes nothing here: the fork already waits on a condition variable in
+  `ps2_kernel_poll_vblank` (up to 2 ms when no vblank is pending), so the upstream wait is redundant.
+
+The merge is about Linux hooks, native `.so` mods and a more robust swapchain, not speed.
+
 ## Known issues
 
 ### 3x internal resolution artifacts
@@ -211,12 +225,13 @@ The High preset uses 4x. No fix is currently planned.
 
 ## Downloads and AppImage
 
-Two builds are published on the [latest release page](https://github.com/Harold0777/eagle_five_recomp/releases/latest):
+The [latest release page](https://github.com/Harold0777/eagle_five_recomp/releases/latest) has:
 
+- `EagleFive-x86_64.AppImage` (with a `.sha256` file): single file with the graphical launcher (`tools/ac5_launcher.py`).
 - `ac5-recomp-linux-x86_64-<version>.tar.gz` (with a `.sha256` file): portable tarball.
-- `EagleFive-x86_64.AppImage`: single file with the graphical launcher (`tools/ac5_launcher.py`).
+- `ac5-recomp-linux-aarch64-<version>.tar.gz` (with a `.sha256` file): **experimental** ARM64 tarball, see below.
 
-Neither build includes the game. You need your own legally dumped ISO of Ace Combat 5 (USA, `SLUS_208.51`).
+None of them includes the game. You need your own legally dumped ISO of Ace Combat 5 (USA, `SLUS_208.51`).
 
 ### Running the AppImage
 
@@ -239,6 +254,13 @@ python3 eagle_five_recomp/tools/make_image.py /path/to/AC5.iso generated
 ./ac5 --data generated --disc /path/to/AC5.iso
 ```
 
+### ARM64 (experimental)
+
+The ARM64 tarball is built with clang and has **not been run on ARM64 hardware or with a GPU**. Under
+emulation (qemu-user), `ac5 --hle-test`, `ac5 --spu2-test` and `ac5 --selftest` pass. The hook layer is
+x86-64 only, so on ARM64 render taps, the sun flare fix and hook-based mods are disabled, and VU1 runs a
+scalar path. There is no ARM64 AppImage. Create `ps2_image.bin` the same way as for the x86-64 tarball.
+
 ### Building the AppImage yourself
 
 Needs the generated sources (`generated/`), GCC 15+ or Clang 13+, SDL3 and the Vulkan SDK (`glslc`):
@@ -250,46 +272,60 @@ Needs the generated sources (`generated/`), GCC 15+ or Clang 13+, SDL3 and the V
 
 ## Testing and CI
 
-The project includes self-tests for the core emulation components, which can be run locally without needing a game disc or capture.
+The project has self-tests that run without a game disc or capture.
 
-### Built-in Self-Tests
+### Built-in self-tests
 
-The `gsreplay` binary can execute mathematical and pipeline self-tests for the VU (Vector Unit) and VIF (VPU Interface):
+`gsreplay` can run self-tests for the VU (vector unit) and the VIF (VPU interface):
 
 ```bash
 ./build/gsreplay --vu-test
 ./build/gsreplay --vif-test
-
-These tests validate the behavior of the flag pipeline, Q/P register latency, and unpacking logic. They exit with code 0 on success and 1 on failure (printing the specific failure to stdout).
-
-Crucially, these tests run the same instruction sequences on both the x86 (SSE) fast path and the ARM64 (scalar) fallback path, guaranteeing that the emulation math is identical across architectures.
-Smoke Test Script
-
-A comprehensive smoke test script is available at tools/smoke.sh. It is the exact script executed by the GitHub Actions CI. It validates:
-
-    The binary is a valid ELF for the current architecture and resolves its shared libraries.
-
-    --help reaches the parser correctly.
-
-    --novideo gets past VU initialization without a SIGILL (especially important for ARM64).
-
-    The VU and VIF self-tests pass mathematically.
-
-To run it locally (requires the build directory to be populated):
-bash
-
-bash tools/smoke.sh
-
-CI Pipeline
-
-The GitHub Actions workflow (.github/workflows/ci.yml) runs on every push and pull request, compiling and testing the code on:
-
-    linux (gcc 15, x86-64)
-
-    linux (clang, x86-64)
-
-    linux (clang, arm64)
 ```
+
+They check the flag pipeline, Q/P register latency and unpacking logic, exit with 0 on success and 1 on
+failure, and print the failing check. On x86-64 they exercise the SIMD path, on ARM64 the scalar fallback
+(see `VU_SIMD` in `ps2_vu.c`).
+
+The game binary has its own tests. These two need no game data:
+
+```bash
+./build/ac5 --hle-test --novideo
+./build/ac5 --spu2-test --novideo
+```
+
+`./build/ac5 --selftest --data generated --disc /path/to/AC5.iso --novideo` checks the file layer
+against your disc, so it needs `generated/ps2_image.bin` and the ISO.
+
+### Smoke test script
+
+`tools/smoke.sh` is the script the CI runs. It checks that:
+
+- the binary is a valid ELF for the current architecture and resolves its shared libraries;
+- `--help` reaches the argument parser;
+- `--novideo` gets past VU initialization without a SIGILL (important on ARM64);
+- the VU and VIF self-tests pass.
+
+Run it locally with a populated build directory:
+
+```bash
+bash tools/smoke.sh
+```
+
+### CI
+
+`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests, on:
+
+- linux (gcc 15, x86-64)
+- linux (clang, x86-64)
+- linux (clang, arm64)
+
+Each job builds `gsreplay` with `-DPS2_RUNTIME_ONLY=ON`, runs the smoke test and
+`tools/test_patch.py` / `tools/test_settings.py`. CI cannot build the game itself or the AppImage,
+because they need `generated/`, which is derived from the game. The `gsreplay binaries` workflow
+builds `gsreplay` for x86-64 and ARM64 on `v*` tags. Playable releases are built locally with
+`tools/make_appimage.sh` and `tools/package.sh`.
+
 ## Credits
 
 - Original static recompilation: [sal063/Ace-Combat-5-Static-recompilation](https://github.com/sal063/Ace-Combat-5-Static-recompilation).
