@@ -43,7 +43,7 @@ on Linux systems:
 |---|---------|-------------|
 | **CPU** | x86-64 v2 (SSE4.2) | x86-64 v3 (AVX2) |
 | **GPU** | Vulkan 1.2 | Vulkan 1.3+ |
-| **RAM** | 4 GB | 8 GB |
+| **RAM** | 3 GB | 6 GB |
 | **OS** | Linux (X11 or Wayland) | — |
 | **Game** | Ace Combat 5 (USA) `SLUS_208.51` | — |
 
