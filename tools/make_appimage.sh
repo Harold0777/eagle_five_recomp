@@ -72,7 +72,13 @@ fi
 
 cd "$ROOT"
 export OUTPUT="EagleFive-$ARCH.AppImage"
-"$LINUXDEPLOY" --appimage-extract-and-run \
+LD="$LINUXDEPLOY --appimage-extract-and-run"
+if [ -x "$ROOT/linuxdeploy-root/usr/bin/linuxdeploy" ]; then
+  LD="$ROOT/linuxdeploy-root/usr/bin/linuxdeploy"
+  export PATH="$ROOT/linuxdeploy-root/usr/bin:$PATH"
+  export APPIMAGE_EXTRACT_AND_RUN=1
+fi
+$LD \
   --appdir "$APPDIR" \
   --exclude-library "libvulkan*" \
   --executable "$APPDIR/usr/bin/ac5" \

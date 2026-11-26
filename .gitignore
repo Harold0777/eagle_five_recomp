@@ -79,3 +79,5 @@ EagleFive-*.AppImage
 appimage.log
 *.sha256
 build-arm64/
+linuxdeploy-root/
+linuxdeploy-*.AppImage
