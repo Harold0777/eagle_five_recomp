@@ -73,8 +73,9 @@ bench_base*.txt
 perf_*.data
 AppDir/
 build-appimage/
-linuxdeploy-x86_64.AppImage
-EagleFive-x86_64.AppImage
+build-appimage-*/
+linuxdeploy-*.AppImage
+EagleFive-*.AppImage
 appimage.log
 *.sha256
 build-arm64/

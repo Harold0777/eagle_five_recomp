@@ -228,8 +228,8 @@ The High preset uses 4x. No fix is currently planned.
 The [latest release page](https://github.com/Harold0777/eagle_five_recomp/releases/latest) has:
 
 - `EagleFive-x86_64.AppImage` (with a `.sha256` file): single file with the graphical launcher (`tools/ac5_launcher.py`).
-- `ac5-recomp-linux-x86_64-<version>.tar.gz` (with a `.sha256` file): portable tarball.
-- `ac5-recomp-linux-aarch64-<version>.tar.gz` (with a `.sha256` file): **experimental** ARM64 tarball, see below.
+- `EagleFive-linux-x86_64-<version>.tar.gz` (with a `.sha256` file): portable tarball.
+- `EagleFive-linux-aarch64-<version>.tar.gz` (with a `.sha256` file): **experimental** ARM64 tarball, see below.
 
 None of them includes the game. You need your own legally dumped ISO of Ace Combat 5 (USA, `SLUS_208.51`).
 

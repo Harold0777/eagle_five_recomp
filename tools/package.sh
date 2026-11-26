@@ -4,8 +4,8 @@
 # Uso: ./tools/package.sh v1.0.0
 #
 # Gera em dist/:
-#   ac5-recomp-linux-x86_64-v1.0.0.tar.gz
-#   ac5-recomp-linux-x86_64-v1.0.0.tar.gz.sha256
+#   EagleFive-linux-x86_64-v1.0.0.tar.gz
+#   EagleFive-linux-x86_64-v1.0.0.tar.gz.sha256
 #
 set -euo pipefail
 
@@ -22,7 +22,7 @@ BUILD="${BUILD_DIR:-$ROOT/build}"
 case "$BUILD" in /*) ;; *) BUILD="$ROOT/$BUILD" ;; esac
 DIST="$ROOT/dist"
 ARCH="${ARCH:-x86_64}"   # x86_64 (padrão) ou aarch64
-NAME="ac5-recomp-linux-$ARCH-$VERSION"
+NAME="EagleFive-linux-$ARCH-$VERSION"
 STAGE="$DIST/$NAME"
 
 echo "[+] Versao: $VERSION"

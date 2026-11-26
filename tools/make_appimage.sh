@@ -2,15 +2,32 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BUILD="$ROOT/build-appimage"
-APPDIR="$ROOT/AppDir"
-LINUXDEPLOY="$ROOT/linuxdeploy-x86_64.AppImage"
 
-cmake -S "$ROOT" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
-cmake --build "$BUILD" -j"$(nproc)"
+# ARCH: x86_64 (default on x86-64 hosts) or aarch64 (default on arm64 hosts).
+# BUILD_DIR: build tree to use (default: build-appimage, or build-appimage-aarch64).
+# SKIP_BUILD=1: do not configure/compile, only install an existing BUILD_DIR.
+ARCH="${ARCH:-$(uname -m)}"
+case "$ARCH" in
+  x86_64|aarch64) ;;
+  arm64) ARCH=aarch64 ;;
+  *) echo "ARCH desconhecida: $ARCH (use x86_64 ou aarch64)"; exit 1 ;;
+esac
+export ARCH
+if [ -n "${BUILD_DIR:-}" ]; then BUILD="$BUILD_DIR"
+elif [ "$ARCH" = x86_64 ]; then BUILD="$ROOT/build-appimage"
+else BUILD="$ROOT/build-appimage-$ARCH"; fi
+APPDIR="$ROOT/AppDir"
+LINUXDEPLOY="$ROOT/linuxdeploy-$ARCH.AppImage"
+
+if [ "${SKIP_BUILD:-0}" = 1 ]; then
+  [ -x "$BUILD/ac5" ] || { echo "SKIP_BUILD=1 mas $BUILD/ac5 nao existe"; exit 1; }
+else
+  cmake -S "$ROOT" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build "$BUILD" -j"$(nproc)"
+fi
 
 rm -rf "$APPDIR"
-DESTDIR="$APPDIR" cmake --install "$BUILD"
+DESTDIR="$APPDIR" cmake --install "$BUILD" --prefix /usr
 
 install -Dm644 "$ROOT/tools/ac5_settings.default.ini" \
   "$APPDIR/usr/share/eagle_five/ac5_settings.default.ini"
@@ -49,12 +66,12 @@ chmod +x "$ROOT/packaging/AppRun"
 
 if [ ! -x "$LINUXDEPLOY" ]; then
   curl -L -o "$LINUXDEPLOY" \
-    https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+    "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-$ARCH.AppImage"
   chmod +x "$LINUXDEPLOY"
 fi
 
 cd "$ROOT"
-export OUTPUT="EagleFive-x86_64.AppImage"
+export OUTPUT="EagleFive-$ARCH.AppImage"
 "$LINUXDEPLOY" --appimage-extract-and-run \
   --appdir "$APPDIR" \
   --exclude-library "libvulkan*" \
