@@ -26,10 +26,23 @@ fi
     apt-get update -qq
     apt-get install -y -qq cmake make clang pkg-config libvulkan-dev glslang-tools \
       libsdl3-dev glslc curl file patchelf binutils squashfs-tools >/dev/null
+    LD=linuxdeploy-aarch64.AppImage
+    if [ ! -x linuxdeploy-root/usr/bin/linuxdeploy ]; then
+      [ -f "$LD" ] || curl -fL -o "$LD" \
+        "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/$LD"
+      chmod +x "$LD"
+      rm -rf linuxdeploy-root
+      ok=0
+      for off in $(grep -obUa hsqs "$LD" | cut -d: -f1); do
+        if unsquashfs -o "$off" -d linuxdeploy-root "$LD" >/dev/null 2>&1; then ok=1; break; fi
+        rm -rf linuxdeploy-root
+      done
+      [ "$ok" = 1 ] || { echo "nao consegui extrair o linuxdeploy"; exit 1; }
+    fi
     rc=0
     bash tools/make_appimage.sh || rc=$?
     chown -R "$HOSTUID:$HOSTGID" AppDir build-arm64 EagleFive-aarch64.AppImage \
-      linuxdeploy-aarch64.AppImage packaging 2>/dev/null || true
+      linuxdeploy-aarch64.AppImage linuxdeploy-root packaging 2>/dev/null || true
     exit $rc'
 
 echo "Gerado: $ROOT/EagleFive-aarch64.AppImage"
