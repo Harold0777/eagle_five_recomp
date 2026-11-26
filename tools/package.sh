@@ -73,6 +73,18 @@ chmod +x "$STAGE/ac5"
 cp "$ROOT/tools/ac5_launcher.py" "$STAGE/tools/"
 chmod +x "$STAGE/tools/ac5_launcher.py"
 
+# O launcher gera o ps2_image.bin da ISO do usuario: precisa de make_image.py e elf.py
+for f in tools/make_image.py tools/ps2recomp/elf.py; do
+    [ -f "$ROOT/$f" ] || { echo "[!] $f nao encontrado"; exit 1; }
+done
+cp "$ROOT/tools/make_image.py" "$STAGE/tools/"
+mkdir -p "$STAGE/tools/ps2recomp"
+cp "$ROOT/tools/ps2recomp/elf.py" "$STAGE/tools/ps2recomp/"
+[ -f "$ROOT/tools/ps2recomp/__init__.py" ] && cp "$ROOT/tools/ps2recomp/__init__.py" "$STAGE/tools/ps2recomp/"
+
+# O runtime le config/game_symbols.txt e config/pac_names.txt
+cp -r "$ROOT/config" "$STAGE/config"
+
 # ps2_image.bin e a imagem em memoria do executavel do jogo: NAO vai no pacote.
 # O usuario gera a partir da propria ISO (tools/make_image.py ou o launcher).
 
