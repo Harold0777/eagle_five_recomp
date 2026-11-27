@@ -260,7 +260,7 @@ python3 eagle_five_recomp/tools/make_image.py /path/to/AC5.iso generated
 The ARM64 tarball is built with clang and has **not been run on ARM64 hardware or with a GPU**. Under
 emulation (qemu-user), `ac5 --hle-test`, `ac5 --spu2-test` and `ac5 --selftest` pass. The hook layer is
 x86-64 only, so on ARM64 render taps, the sun flare fix and hook-based mods are disabled, and VU1 runs a
-scalar path. There is no ARM64 AppImage. Create `ps2_image.bin` the same way as for the x86-64 tarball.
+scalar path. Create `ps2_image.bin` the same way as for the x86-64 tarball.
 
 ### Building the AppImage yourself
 
