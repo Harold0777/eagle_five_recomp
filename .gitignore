@@ -81,3 +81,4 @@ appimage.log
 build-arm64/
 linuxdeploy-root/
 linuxdeploy-*.AppImage
+build-lto

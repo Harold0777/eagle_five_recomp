@@ -105,6 +105,12 @@ if [ -f "$ROOT/tools/ac5_settings.default.ini" ]; then
     echo "[+] Settings default copiado"
 fi
 
+# Pipeline keys pre-aquecidos (independente de GPU/driver; nunca incluir .cache)
+if [ -f "$ROOT/tools/ac5_pipelines.keys" ]; then
+    cp "$ROOT/tools/ac5_pipelines.keys" "$STAGE/ac5_pipelines.keys"
+    echo "[+] Pipeline keys copiado"
+fi
+
 # Script de arranque
 cat > "$STAGE/run.sh" <<'EOF2'
 #!/usr/bin/env bash

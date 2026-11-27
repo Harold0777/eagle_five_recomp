@@ -3569,14 +3569,6 @@ static void render_list(VkCommandBuffer cmd, vk_frame *fr) {
                 if (rl == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
                     rset = d->tex_depth ? src->dset : src->set;
             }
-            if (d->rt < RT_SLOTS) {
-                vk_target *inv = &rts[d->rt];
-                if (!d->tex_self) inv->snap_valid = 0;
-                if (d->scissor[0] < inv->sdx0) inv->sdx0 = d->scissor[0];
-                if (d->scissor[2] < inv->sdy0) inv->sdy0 = d->scissor[2];
-                if (d->scissor[1] + 1 > inv->sdx1) inv->sdx1 = d->scissor[1] + 1;
-                if (d->scissor[3] + 1 > inv->sdy1) inv->sdy1 = d->scissor[3] + 1;
-            }
             if (rset) set = rset;
             else if (d->tex != 0xFFFF && d->tex < ntextures
                      && textures[d->tex].set)
@@ -3627,10 +3619,21 @@ static void render_list(VkCommandBuffer cmd, vk_frame *fr) {
         }
         {   VkDescriptorSet dset = set;
             if (d->date && d->rt < RT_SLOTS && rts[d->rt].created) {
+                int fresh = !rts[d->rt].snap_valid;
                 VkDescriptorSet snap = target_snapshot(cmd, &rts[d->rt]);
                 if (snap) dset = snap;
-                cur_fb_w = 0;
-                vb = 0;
+                if (fresh && snap) {
+                    cur_fb_w = 0;
+                    vb = 0;
+                }
+            }
+            if (d->rt < RT_SLOTS) {
+                vk_target *inv = &rts[d->rt];
+                if (!d->tex_self) inv->snap_valid = 0;
+                if (d->scissor[0] < inv->sdx0) inv->sdx0 = d->scissor[0];
+                if (d->scissor[2] < inv->sdy0) inv->sdy0 = d->scissor[2];
+                if (d->scissor[1] + 1 > inv->sdx1) inv->sdx1 = d->scissor[1] + 1;
+                if (d->scissor[3] + 1 > inv->sdy1) inv->sdy1 = d->scissor[3] + 1;
             }
             {   VkDescriptorSet sets[2];
                 sets[0] = set; sets[1] = dset;

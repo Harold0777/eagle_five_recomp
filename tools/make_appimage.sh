@@ -31,6 +31,10 @@ DESTDIR="$APPDIR" cmake --install "$BUILD" --prefix /usr
 
 install -Dm644 "$ROOT/tools/ac5_settings.default.ini" \
   "$APPDIR/usr/share/eagle_five/ac5_settings.default.ini"
+if [ -f "$ROOT/tools/ac5_pipelines.keys" ]; then
+  install -Dm644 "$ROOT/tools/ac5_pipelines.keys" \
+    "$APPDIR/usr/share/eagle_five/ac5_pipelines.keys"
+fi
 
 mkdir -p "$ROOT/packaging"
 
@@ -56,6 +60,7 @@ mkdir -p "$DATA"
 ln -sfn "$HERE/usr/share/eagle_five/shaders" "$DATA/shaders"
 [ -d "$DATA/config" ] || cp -r "$HERE/usr/share/eagle_five/config" "$DATA/config"
 [ -f "$DATA/ac5_settings.ini" ] || cp "$HERE/usr/share/eagle_five/ac5_settings.default.ini" "$DATA/ac5_settings.ini"
+[ -f "$DATA/ac5_pipelines.keys" ] || [ ! -f "$HERE/usr/share/eagle_five/ac5_pipelines.keys" ] || cp "$HERE/usr/share/eagle_five/ac5_pipelines.keys" "$DATA/ac5_pipelines.keys"
 
 cd "$DATA"
 export AC5_BIN="$HERE/usr/bin/ac5"

@@ -106,6 +106,11 @@ typedef struct hook_frame {
 static __thread const hook_frame *cur_frame;
 static __thread unsigned call_depth;
 
+#if defined(__GNUC__) && !defined(__clang__)
+__attribute__((used, externally_visible))
+#elif defined(__GNUC__)
+__attribute__((used))
+#endif
 void *ps2_hook_enter(u32 id, ps2_ctx *ctx);
 void *ps2_hook_enter(u32 id, ps2_ctx *ctx) {
     hook_site *s = &sites[id];

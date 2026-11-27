@@ -14,6 +14,17 @@ set(GEN_OPT "-O1")
 set(CMAKE_C_FLAGS_RELEASE "-O2")
 set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 
+option(PS2_ENABLE_LTO "Enable Link-Time Optimization on Release builds" OFF)
+if(PS2_ENABLE_LTO)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT ipo_ok OUTPUT ipo_err)
+  if(ipo_ok)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+  else()
+    message(WARNING "LTO not supported: ${ipo_err}")
+  endif()
+endif()
+
 option(PS2_DIAG "compile the entry histogram and the guest-store watch in" OFF)
 
 find_package(Threads REQUIRED)
