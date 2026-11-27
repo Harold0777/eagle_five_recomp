@@ -27,6 +27,10 @@ static unsigned refused_code, refused_unmapped;
 
 static const char *who(const char *owner) { return owner ? owner : "?"; }
 
+static int same_owner(const char *a, const char *b) {
+    return a == b || (a && b && !strcmp(a, b));
+}
+
 static int mapped(u32 addr, u32 len) {
     for (u32 a = addr & ~PS2_PAGE_MASK; ; a += PS2_PAGE_SIZE) {
         if (!ps2_pt[a >> PS2_PAGE_BITS]) return 0;
@@ -114,24 +118,30 @@ int ps2_patch_add(u32 addr, const u8 *bytes, const u8 *original, u32 len,
                 origin ? origin : "?");
         return -1;
     }
+    /* Look for a patch that keeps the bytes before taking any: a refused
+       patch must not turn off the lower-priority ones it overlaps. */
+    for (unsigned i = 0; i < npatches; i++) {
+        patch *q = patches[i];
+        if (q->state != P_ACTIVE || q->addr >= addr + len || addr >= q->addr + q->len
+            || same_owner(q->owner, owner) || q->priority < priority)
+            continue;
+        ps2_log("patch: conflict at %08X -- %s (priority %d, %s) keeps it, "
+                "so %s's patch (priority %d, %s) is off", addr,
+                who(q->owner), q->priority, q->origin, who(owner), priority,
+                origin ? origin : "?");
+        return -1;
+    }
     for (unsigned i = 0; i < npatches; i++) {
         patch *q = patches[i];
         if (q->state != P_ACTIVE || q->addr >= addr + len || addr >= q->addr + q->len)
             continue;
-        if (q->owner == owner || (q->owner && owner && !strcmp(q->owner, owner))) {
+        if (same_owner(q->owner, owner)) {
             const char *qs = strchr(q->origin, '['), *ns = origin ? strchr(origin, '[') : NULL;
             if (qs && ns && strcmp(qs, ns))
                 ps2_log("patch: %s patches %08X in two sections, %s and %s; "
                         "the later one wins -- keep only the section you want",
                         who(owner), addr, qs, ns);
             continue;
-        }
-        if (q->priority >= priority) {
-            ps2_log("patch: conflict at %08X -- %s (priority %d, %s) keeps it, "
-                    "so %s's patch (priority %d, %s) is off", addr,
-                    who(q->owner), q->priority, q->origin, who(owner), priority,
-                    origin ? origin : "?");
-            return -1;
         }
         ps2_log("patch: conflict at %08X -- %s (priority %d, %s) takes it "
                 "from %s (priority %d, %s)", addr, who(owner), priority,

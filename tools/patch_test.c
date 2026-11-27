@@ -117,6 +117,20 @@ int main(int argc, char **argv) {
     ps2_patch_field();
     CHECK(ps2_ram[0x00460000u] == 0x00, "low no longer applies");
 
+    memset(b4, 0x44, 2);
+    CHECK(ps2_patch_add(0x00480000u, b4, NULL, 2, PS2_PATCH_ALWAYS, 1, "a", "t:8") > 0,
+          "a added");
+    memset(b4, 0x55, 2);
+    CHECK(ps2_patch_add(0x00480002u, b4, NULL, 2, PS2_PATCH_ALWAYS, 10, "b", "t:9") > 0,
+          "b added next to a");
+    memset(b4, 0x66, 4);
+    CHECK(ps2_patch_add(0x00480000u, b4, NULL, 4, PS2_PATCH_ALWAYS, 5, "c", "t:10") < 0,
+          "c is refused: b outranks it");
+    ps2_patch_field();
+    CHECK(ps2_ram[0x00480000u] == 0x44 && ps2_ram[0x00480001u] == 0x44,
+          "a still applies: the refused c does not take it off");
+    CHECK(ps2_ram[0x00480002u] == 0x55, "b applies");
+
     wr32(0x00470000u, 0xAAAAAAAAu);
     memcpy(b4, "\x01\x00\x00\x00", 4);
     memcpy(o4, "\xBB\xBB\xBB\xBB", 4);
