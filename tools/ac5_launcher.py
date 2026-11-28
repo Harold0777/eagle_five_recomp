@@ -2815,34 +2815,13 @@ class Launcher(W.QMainWindow):
         e.accept()
 
     def _on_lang_changed(self, idx):
-        if idx < 0 or idx >= len(LANG_CHOICES):
-            return
-        choice = LANG_CHOICES[idx][0]
-        save_lang_pref(choice)
-        global LANG
-        LANG = resolve_initial_lang()
-        if hasattr(self, "navs"):
-            nav_keys = [
-                "01  JOGO",
-                "02  GRÁFICOS",
-                "03  TELA",
-                "04  CONTROLES",
-                "05  MAPEAMENTO",
-                "06  AVANÇADO",
-                "07  CONSOLE",
-            ]
-            for btn, k in zip(self.navs, nav_keys):
-                btn.setText(tr(k))
-        if hasattr(self, "play_btn"):
-            self.play_btn.setText(tr("ABORTAR") if getattr(self, "proc", None) else tr("DECOLAR"))
-        if hasattr(self, "build_settings") and callable(self.build_settings):
-            self.build_settings()
-        if hasattr(self, "check_iso") and callable(self.check_iso):
-            self.check_iso()
-        if hasattr(self, "refresh_cmd") and callable(self.refresh_cmd):
-            self.refresh_cmd()
-        if hasattr(self, "notify"):
-            self.notify(tr("ALTERAÇÕES PENDENTES // CLIQUE EM SALVAR"))
+        # In-place retranslation path removed: _switch_lang() re-execs
+        # via os.execv, so this method is unreachable. Kept as a
+        # no-op shim that only persists the preference.
+        try:
+            save_lang_pref(choice)
+        except Exception:
+            pass
 def main():
     if QtCore is None:
         print(tr("Falta o Qt6 para Python. Instale com:\n"
