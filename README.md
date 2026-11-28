@@ -205,24 +205,23 @@ The merge is about Linux hooks, native `.so` mods and a more robust swapchain, n
 
 ## Known issues
 
-### 3x internal resolution artifacts
+### 3x and 6x internal resolution artifacts (Fixed)
 
-Setting `internal_resolution = 3` (3x) or 6x produces visible artifacts in
-volumetric effects (clouds, smoke, contrails). The bug is not present at 2x, 4x,
-or 5x.
+Previously, setting `internal_resolution = 3` (3x) or 6x produced visible seam
+and border-bleeding artifacts in volumetric effects (clouds, smoke, contrails)
+on RADV hardware paths, while 2x, 4x, 5x, and 8x rendered cleanly.
 
-The cause is still under investigation. The shader math is identical between
-3x and 4x for `dtex`, `downsample`, and the `rt_up` block, so the divergence is
-likely downstream of the shader — possibly in how RADV handles image tiling for
-non-power-of-2 render targets sampled with `VK_SAMPLER_ADDRESS_MODE_REPEAT`.
+**Root cause:** `wrap_up()` and `sample_region_repeat_up()` in
+`runtime/shaders/gs.frag` used floating-point division (`floor(float(k) / float(s))`
+and `floor(vec2(a) / vec2(size))`) to wrap sub-texel coordinates inside the
+impostor atlas. On RADV, reciprocal approximations for factors of 3 rounded
+slightly downward (`< 1.0`) on exact sprite boundaries, shifting the sampled
+coordinate by one texel into neighboring atlas sprites.
 
-**Workaround:** use 2x, 4x, or 5x. All work correctly. The 3x and 6x options
-have been removed from the settings menu so the bug cannot be selected by
-accident, rather than silently promoting 3x to 4x. The `PS2_UPSCALE=3`
-environment variable still works if you need it for investigation.
-
-The High preset uses 4x. No fix is currently planned.
-
+**Fix:** Replaced floating-point divisions in `wrap_up()` and
+`sample_region_repeat_up()` (`runtime/shaders/gs.frag`) with exact integer
+division and modulo arithmetic. Both 3x and 6x (`PS2_UPSCALE=3` / `PS2_UPSCALE=6`)
+now render without volumetric artifacts.
 ## Downloads and AppImage
 
 The [latest release page](https://github.com/Harold0777/eagle_five_recomp/releases/latest) has:
