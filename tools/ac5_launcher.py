@@ -1999,6 +1999,41 @@ class MappingEditor(W.QWidget):
         self.on_change()
 
 
+
+
+
+
+def _resolve_lang_choice(raw):
+    """Aceita data ('pt') ou texto ('Português') do combo e devolve código válido."""
+    if raw is None:
+        return "auto"
+    s = str(raw).strip()
+    if not s:
+        return "auto"
+    low = s.lower()
+    if low in SUPPORTED_LANGS or low == "auto":
+        return low
+    for code, disp in LANG_CHOICES:
+        if s == disp or low == disp.lower():
+            return code
+    prefix = low.split(".")[0].split("@")[0].replace("-", "_").split("_")[0]
+    if prefix in SUPPORTED_LANGS:
+        return prefix
+    return "auto"
+
+def relaunch_with_lang(new_lang):
+    """Troca de idioma confiável: persiste preferência e re-executa o processo."""
+    code = _resolve_lang_choice(new_lang)
+    try:
+        save_lang_pref(code)
+    except Exception:
+        pass
+    if code == "auto":
+        os.environ.pop("AC5_LAUNCHER_LANG", None)
+    else:
+        os.environ["AC5_LAUNCHER_LANG"] = code
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
 class Launcher(W.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -2086,11 +2121,37 @@ class Launcher(W.QMainWindow):
                   "driver": self.drv.currentText(), "data": self.data.text().strip()})
 
     # ---------------- páginas ----------------
+
+    def _switch_lang(self):
+        try:
+            self.persist_cfg()
+        except Exception:
+            pass
+        raw = self.lang_combo.currentData()
+        if raw is None:
+            raw = self.lang_combo.currentText()
+        relaunch_with_lang(_resolve_lang_choice(raw))
+
+
     def page_game(self):
         page = W.QWidget()
         v = W.QVBoxLayout(page)
         v.setContentsMargins(36, 30, 36, 26)
         v.setSpacing(18)
+        self.lang_combo = W.QComboBox()
+        self.lang_combo.setFixedWidth(160)
+        _pref = load_lang_pref()
+        _sel = 0
+        for _i, (_code, _label) in enumerate(LANG_CHOICES):
+            self.lang_combo.addItem(tr("Automática") if _label == "Auto (System)" else tr(_label))
+            if _code == _pref:
+                _sel = _i
+        self.lang_combo.setCurrentIndex(_sel)
+        self.lang_combo.currentIndexChanged.connect(lambda _i: self._switch_lang())
+        _lang_row = W.QHBoxLayout()
+        _lang_row.addStretch(1)
+        _lang_row.addWidget(self.lang_combo)
+        v.addLayout(_lang_row)
         v.addLayout(header("01 // BRIEFING", tr("Pronto para decolar?")))
 
         c, cl = card(tr("Disco"))
@@ -2760,23 +2821,28 @@ class Launcher(W.QMainWindow):
         save_lang_pref(choice)
         global LANG
         LANG = resolve_initial_lang()
-        cur_iso = self.iso.text().strip() if hasattr(self, "iso") else ""
-        cur_exe = self.exe.text().strip() if hasattr(self, "exe") else ""
-        cur_data = self.data.text().strip() if hasattr(self, "data") else ""
-        new_win = Launcher()
-        if cur_iso:
-            new_win.iso.setText(cur_iso)
-            new_win._refresh_iso()
-        if cur_exe:
-            new_win.exe.setText(cur_exe)
-        if cur_data:
-            new_win.data.setText(cur_data)
-        new_win.show()
-        self._replacement_win = new_win
-        self.close()
-
-
-
+        if hasattr(self, "navs"):
+            nav_keys = [
+                "01  JOGO",
+                "02  GRÁFICOS",
+                "03  TELA",
+                "04  CONTROLES",
+                "05  MAPEAMENTO",
+                "06  AVANÇADO",
+                "07  CONSOLE",
+            ]
+            for btn, k in zip(self.navs, nav_keys):
+                btn.setText(tr(k))
+        if hasattr(self, "play_btn"):
+            self.play_btn.setText(tr("ABORTAR") if getattr(self, "proc", None) else tr("DECOLAR"))
+        if hasattr(self, "build_settings") and callable(self.build_settings):
+            self.build_settings()
+        if hasattr(self, "check_iso") and callable(self.check_iso):
+            self.check_iso()
+        if hasattr(self, "refresh_cmd") and callable(self.refresh_cmd):
+            self.refresh_cmd()
+        if hasattr(self, "notify"):
+            self.notify(tr("ALTERAÇÕES PENDENTES // CLIQUE EM SALVAR"))
 def main():
     if QtCore is None:
         print(tr("Falta o Qt6 para Python. Instale com:\n"
@@ -2789,6 +2855,40 @@ def main():
     win.show()
     sys.exit(app.exec())
 
+
+
+
+# --- Sincroniza o QComboBox de idioma com LANG efetivo na abertura --------
+def _eagle_showEvent(self, ev):
+    try:
+        W.QMainWindow.showEvent(self, ev)
+    except Exception:
+        pass
+    if getattr(self, "_lang_synced", False):
+        return
+    self._lang_synced = True
+    try:
+        self.lang_combo.blockSignals(True)
+        target = LANG
+        for i in range(self.lang_combo.count()):
+            d = self.lang_combo.itemData(i)
+            t = self.lang_combo.itemText(i)
+            code = _resolve_lang_choice(d if d is not None else t)
+            if code == target:
+                self.lang_combo.setCurrentIndex(i)
+                break
+    except Exception:
+        pass
+    finally:
+        try:
+            self.lang_combo.blockSignals(False)
+        except Exception:
+            pass
+
+try:
+    Launcher.showEvent = _eagle_showEvent
+except NameError:
+    pass
 
 if __name__ == "__main__":
     if "--selftest" in sys.argv:

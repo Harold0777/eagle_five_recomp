@@ -82,3 +82,6 @@ build-arm64/
 linuxdeploy-root/
 linuxdeploy-*.AppImage
 build-lto
+tools/*.bak
+tools/*.bak2
+tools/*.bak3
