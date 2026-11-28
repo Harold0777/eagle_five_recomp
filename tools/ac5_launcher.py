@@ -90,7 +90,82 @@ def detect_lang():
     return "en"
 
 
-LANG = detect_lang()
+LAUNCHER_CFG_DIR = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
+    "eagle_five",
+)
+LAUNCHER_CFG_FILE = os.path.join(LAUNCHER_CFG_DIR, "launcher.json")
+LANG_CHOICES = (
+    ("auto", "Auto (System)"),
+    ("en", "English"),
+    ("pt", "Português"),
+    ("es", "Español"),
+    ("fr", "Français"),
+)
+
+
+def load_lang_pref():
+    try:
+        with open(LAUNCHER_CFG_FILE, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        val = str(data.get("lang", "auto")).strip().lower()
+        if val == "auto" or val in SUPPORTED_LANGS:
+            return val
+    except Exception:
+        pass
+    return "auto"
+
+
+def save_lang_pref(choice):
+    try:
+        os.makedirs(LAUNCHER_CFG_DIR, exist_ok=True)
+        existing = {}
+        if os.path.exists(LAUNCHER_CFG_FILE):
+            with open(LAUNCHER_CFG_FILE, "r", encoding="utf-8") as fh:
+                existing = json.load(fh)
+        existing["lang"] = choice
+        with open(LAUNCHER_CFG_FILE, "w", encoding="utf-8") as fh:
+            json.dump(existing, fh, indent=2)
+    except Exception:
+        pass
+
+
+def resolve_initial_lang():
+    override = os.environ.get("AC5_LAUNCHER_LANG", "").strip()
+    if override:
+        prefix = override.split(".")[0].split("@")[0].replace("-", "_").lower().split("_")[0]
+        return prefix if prefix in SUPPORTED_LANGS else "en"
+    pref = load_lang_pref()
+    if pref in SUPPORTED_LANGS:
+        return pref
+    return detect_lang()
+
+
+def find_default_ac5_binary():
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+    appdir_bin = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "usr", "bin", "ac5"))
+    candidates = [
+        os.path.join(repo_root, "build", "ac5"),
+        os.path.join(os.getcwd(), "build", "ac5"),
+        os.path.join(os.getcwd(), "ac5"),
+        appdir_bin,
+    ]
+    for cand in candidates:
+        if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
+            return cand
+    return ""
+
+
+def find_default_data_dir():
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+    data_dir = os.path.join(repo_root, "generated")
+    if os.path.isdir(data_dir):
+        return data_dir
+    user_data = os.path.expanduser("~/.local/share/eagle_five/generated")
+    os.makedirs(user_data, exist_ok=True)
+    return user_data
+
+LANG = resolve_initial_lang()
 
 TRANSLATIONS = {
     "Não é uma ISO9660 válida (sem descritor CD001).": {
@@ -2677,6 +2752,29 @@ class Launcher(W.QMainWindow):
                 self.proc.waitForFinished(1000)
         self.persist_cfg()
         e.accept()
+
+    def _on_lang_changed(self, idx):
+        if idx < 0 or idx >= len(LANG_CHOICES):
+            return
+        choice = LANG_CHOICES[idx][0]
+        save_lang_pref(choice)
+        global LANG
+        LANG = resolve_initial_lang()
+        cur_iso = self.iso.text().strip() if hasattr(self, "iso") else ""
+        cur_exe = self.exe.text().strip() if hasattr(self, "exe") else ""
+        cur_data = self.data.text().strip() if hasattr(self, "data") else ""
+        new_win = Launcher()
+        if cur_iso:
+            new_win.iso.setText(cur_iso)
+            new_win._refresh_iso()
+        if cur_exe:
+            new_win.exe.setText(cur_exe)
+        if cur_data:
+            new_win.data.setText(cur_data)
+        new_win.show()
+        self._replacement_win = new_win
+        self.close()
+
 
 
 def main():
