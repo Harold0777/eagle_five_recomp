@@ -33,6 +33,632 @@ if W is None:
 
 SECTOR = 2048
 EXPECTED_SERIAL = "SLUS_208.51"  # Ace Combat 5: The Unsung War (USA)
+
+
+SUPPORTED_LANGS = ("en", "pt", "es", "fr")
+
+
+def detect_lang():
+    override = os.environ.get("AC5_LAUNCHER_LANG", "").strip()
+    if override:
+        prefix = override.split(".")[0].split("@")[0].replace("-", "_").lower().split("_")[0]
+        return prefix if prefix in SUPPORTED_LANGS else "en"
+
+    lc_all = os.environ.get("LC_ALL", "").strip()
+    if lc_all:
+        if lc_all.upper() in ("C", "POSIX"):
+            return "en"
+        prefix = lc_all.split(".")[0].split("@")[0].replace("-", "_").lower().split("_")[0]
+        return prefix if prefix in SUPPORTED_LANGS else "en"
+
+    lang_list = os.environ.get("LANGUAGE", "").strip()
+    if lang_list:
+        for raw in lang_list.split(":"):
+            code = raw.split(".")[0].split("@")[0].replace("-", "_").lower().strip()
+            prefix = code.split("_")[0]
+            if prefix in SUPPORTED_LANGS:
+                return prefix
+
+    for var in ("LC_MESSAGES", "LANG"):
+        val = os.environ.get(var, "").strip()
+        if val:
+            if val.upper() in ("C", "POSIX"):
+                return "en"
+            prefix = val.split(".")[0].split("@")[0].replace("-", "_").lower().split("_")[0]
+            return prefix if prefix in SUPPORTED_LANGS else "en"
+
+    try:
+        import locale as _loc
+        loc_name = _loc.getlocale()[0]
+        if loc_name:
+            prefix = loc_name.replace("-", "_").lower().split("_")[0]
+            if prefix in SUPPORTED_LANGS:
+                return prefix
+    except Exception:
+        pass
+
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            lang_id = ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0xFF
+            win_map = {0x09: "en", 0x16: "pt", 0x0A: "es", 0x0C: "fr"}
+            if lang_id in win_map:
+                return win_map[lang_id]
+        except Exception:
+            pass
+
+    return "en"
+
+
+LANG = detect_lang()
+
+TRANSLATIONS = {
+    "Não é uma ISO9660 válida (sem descritor CD001).": {
+        "en": "Not a valid ISO9660 image (missing CD001 descriptor).",
+        "es": "No es una ISO9660 válida (falta el descriptor CD001).",
+        "fr": "Image ISO9660 invalide (descripteur CD001 manquant).",
+    },
+    "Diretório raiz da ISO inválido.": {
+        "en": "Invalid ISO root directory.",
+        "es": "Directorio raíz de la ISO no válido.",
+        "fr": "Répertoire racine de l’ISO invalide.",
+    },
+    "%s não encontrado na raiz da ISO.": {
+        "en": "%s not found in the ISO root.",
+        "es": "%s no encontrado en la raíz de la ISO.",
+        "fr": "%s introuvable à la racine de l’ISO.",
+    },
+    "Falha ao ler a ISO.": {
+        "en": "Failed to read the ISO.",
+        "es": "Error al leer la ISO.",
+        "fr": "Échec de la lecture de l’ISO.",
+    },
+    "SYSTEM.CNF sem linha BOOT2 reconhecível.": {
+        "en": "SYSTEM.CNF has no recognizable BOOT2 line.",
+        "es": "SYSTEM.CNF sin línea BOOT2 reconocible.",
+        "fr": "SYSTEM.CNF sans ligne BOOT2 reconnaissable.",
+    },
+    "ISO correta: Ace Combat 5 (USA) [%s]": {
+        "en": "Valid ISO: Ace Combat 5 (USA) [%s]",
+        "es": "ISO correcta: Ace Combat 5 (USA) [%s]",
+        "fr": "ISO valide : Ace Combat 5 (USA) [%s]",
+    },
+    "ISO de outro jogo ou região: %s (esperado %s)": {
+        "en": "ISO is from another game or region: %s (expected %s)",
+        "es": "ISO de otro juego o región: %s (se esperaba %s)",
+        "fr": "ISO d’un autre jeu ou d’une autre région : %s (attendu : %s)",
+    },
+    "Imagem": {"en": "Picture", "es": "Imagen", "fr": "Image"},
+    "Pós-processamento": {"en": "Post-processing", "es": "Posprocesado", "fr": "Post-traitement"},
+    "Janela e tela": {"en": "Window & display", "es": "Ventana y pantalla", "fr": "Fenêtre et affichage"},
+    "Entrada": {"en": "Input", "es": "Entrada", "fr": "Entrées"},
+    "Analógicos": {"en": "Analog sticks", "es": "Sticks analógicos", "fr": "Sticks analogiques"},
+    "Teclado": {"en": "Keyboard", "es": "Teclado", "fr": "Clavier"},
+    "Controle": {"en": "Controller", "es": "Mando", "fr": "Manette"},
+    "Direcional ↑": {"en": "D-Pad ↑", "es": "Cruceta ↑", "fr": "Croix dir. ↑"},
+    "Direcional →": {"en": "D-Pad →", "es": "Cruceta →", "fr": "Croix dir. →"},
+    "Direcional ↓": {"en": "D-Pad ↓", "es": "Cruceta ↓", "fr": "Croix dir. ↓"},
+    "Direcional ←": {"en": "D-Pad ←", "es": "Cruceta ←", "fr": "Croix dir. ←"},
+    "Triângulo": {"en": "Triangle", "es": "Triángulo", "fr": "Triangle"},
+    "Círculo": {"en": "Circle", "es": "Círculo", "fr": "Rond"},
+    "X (cruz)": {"en": "Cross (X)", "es": "Cruz (X)", "fr": "Croix (X)"},
+    "Quadrado": {"en": "Square", "es": "Cuadrado", "fr": "Carré"},
+    "Analógico esq. ↑": {"en": "Left stick ↑", "es": "Stick izq. ↑", "fr": "Stick gauche ↑"},
+    "Analógico esq. ↓": {"en": "Left stick ↓", "es": "Stick izq. ↓", "fr": "Stick gauche ↓"},
+    "Analógico esq. ←": {"en": "Left stick ←", "es": "Stick izq. ←", "fr": "Stick gauche ←"},
+    "Analógico esq. →": {"en": "Left stick →", "es": "Stick izq. →", "fr": "Stick gauche →"},
+    "Analógico dir. ↑": {"en": "Right stick ↑", "es": "Stick der. ↑", "fr": "Stick droit ↑"},
+    "Analógico dir. ↓": {"en": "Right stick ↓", "es": "Stick der. ↓", "fr": "Stick droit ↓"},
+    "Analógico dir. ←": {"en": "Right stick ←", "es": "Stick der. ←", "fr": "Stick droit ←"},
+    "Analógico dir. →": {"en": "Right stick →", "es": "Stick der. →", "fr": "Stick droit →"},
+    "Ctrl esq.": {"en": "Left Ctrl", "es": "Ctrl izq.", "fr": "Ctrl gauche"},
+    "Shift esq.": {"en": "Left Shift", "es": "Shift izq.", "fr": "Maj gauche"},
+    "Shift dir.": {"en": "Right Shift", "es": "Shift der.", "fr": "Maj droite"},
+    "Alt esq.": {"en": "Left Alt", "es": "Alt izq.", "fr": "Alt gauche"},
+    "Espaço": {"en": "Space", "es": "Espacio", "fr": "Espace"},
+    "Ctrl dir.": {"en": "Right Ctrl", "es": "Ctrl der.", "fr": "Ctrl droite"},
+    "Alt dir.": {"en": "Right Alt", "es": "Alt der.", "fr": "Alt droite"},
+    "Seta ↑": {"en": "Up Arrow", "es": "Flecha ↑", "fr": "Flèche ↑"},
+    "Seta ←": {"en": "Left Arrow", "es": "Flecha ←", "fr": "Flèche ←"},
+    "Seta →": {"en": "Right Arrow", "es": "Flecha →", "fr": "Flèche →"},
+    "Seta ↓": {"en": "Down Arrow", "es": "Flecha ↓", "fr": "Flèche ↓"},
+    "Meta esq.": {"en": "Left Super", "es": "Super izq.", "fr": "Super gauche"},
+    "Meta dir.": {"en": "Right Super", "es": "Super der.", "fr": "Super droite"},
+    "A (Cruz)": {"en": "A (Cross)", "es": "A (Cruz)", "fr": "A (Croix)"},
+    "B (Bola)": {"en": "B (Circle)", "es": "B (Círculo)", "fr": "B (Rond)"},
+    "X (Quadrado)": {"en": "X (Square)", "es": "X (Cuadrado)", "fr": "X (Carré)"},
+    "Y (Triângulo)": {"en": "Y (Triangle)", "es": "Y (Triángulo)", "fr": "Y (Triangle)"},
+    "Guide / Home": {"en": "Guide / Home", "es": "Guide / Home", "fr": "Guide / Accueil"},
+    "Clique do analógico esquerdo (L3)": {
+        "en": "Left stick click (L3)",
+        "es": "Clic stick izquierdo (L3)",
+        "fr": "Clic stick gauche (L3)",
+    },
+    "Clique do analógico direito (R3)": {
+        "en": "Right stick click (R3)",
+        "es": "Clic stick derecho (R3)",
+        "fr": "Clic stick droit (R3)",
+    },
+    "Analógico esquerdo ←": {"en": "Left stick ←", "es": "Stick izquierdo ←", "fr": "Stick gauche ←"},
+    "Analógico esquerdo →": {"en": "Left stick →", "es": "Stick izquierdo →", "fr": "Stick gauche →"},
+    "Analógico esquerdo ↑": {"en": "Left stick ↑", "es": "Stick izquierdo ↑", "fr": "Stick gauche ↑"},
+    "Analógico esquerdo ↓": {"en": "Left stick ↓", "es": "Stick izquierdo ↓", "fr": "Stick gauche ↓"},
+    "Analógico direito ←": {"en": "Right stick ←", "es": "Stick derecho ←", "fr": "Stick droit ←"},
+    "Analógico direito →": {"en": "Right stick →", "es": "Stick derecho →", "fr": "Stick droit →"},
+    "Analógico direito ↑": {"en": "Right stick ↑", "es": "Stick derecho ↑", "fr": "Stick droit ↑"},
+    "Analógico direito ↓": {"en": "Right stick ↓", "es": "Stick derecho ↓", "fr": "Stick droit ↓"},
+    "Gatilho esquerdo (LT / L2)": {
+        "en": "Left trigger (LT / L2)",
+        "es": "Gatillo izquierdo (LT / L2)",
+        "fr": "Gâchette gauche (LT / L2)",
+    },
+    "Gatilho direito (RT / R2)": {
+        "en": "Right trigger (RT / R2)",
+        "es": "Gatillo derecho (RT / R2)",
+        "fr": "Gâchette droite (RT / R2)",
+    },
+    "Desligado": {"en": "Off", "es": "Desactivado", "fr": "Désactivé"},
+    "Automática (cobre a janela)": {
+        "en": "Automatic (covers window)",
+        "es": "Automática (cubre la ventana)",
+        "fr": "Automatique (couvre la fenêtre)",
+    },
+    " (nativa)": {"en": " (native)", "es": " (nativa)", "fr": " (native)"},
+    "Qualidade (preset)": {"en": "Quality (preset)", "es": "Calidad (preajuste)", "fr": "Qualité (préréglage)"},
+    "Baixa": {"en": "Low", "es": "Baja", "fr": "Basse"},
+    "Média": {"en": "Medium", "es": "Media", "fr": "Moyenne"},
+    "Alta": {"en": "High", "es": "Alta", "fr": "Élevée"},
+    "Personalizada": {"en": "Custom", "es": "Personalizada", "fr": "Personnalisée"},
+    "Resolução interna": {"en": "Internal resolution", "es": "Resolución interna", "fr": "Résolution interne"},
+    "Filtro de textura": {"en": "Texture filtering", "es": "Filtro de texturas", "fr": "Filtrage des textures"},
+    "Como o jogo pede": {"en": "As the game requests", "es": "Como pide el juego", "fr": "Selon le jeu"},
+    "Forçar pixelado (nearest)": {
+        "en": "Force pixelated (nearest)",
+        "es": "Forzar pixelado (nearest)",
+        "fr": "Forcer pixelisé (nearest)",
+    },
+    "Forçar bilinear": {"en": "Force bilinear", "es": "Forzar bilineal", "fr": "Forcer bilinéaire"},
+    "Filtragem anisotrópica": {
+        "en": "Anisotropic filtering",
+        "es": "Filtrado anisotrópico",
+        "fr": "Filtrage anisotrope",
+    },
+    "Desentrelaçamento (junta os campos)": {
+        "en": "Deinterlacing (weave fields)",
+        "es": "Desentrelazado (une los campos)",
+        "fr": "Désentrelacement (fusion des trames)",
+    },
+    "Filtro de escala": {"en": "Scaling filter", "es": "Filtro de escalado", "fr": "Filtre de mise à l’échelle"},
+    "Pixelado (nearest)": {"en": "Pixelated (nearest)", "es": "Pixelado (nearest)", "fr": "Pixelisé (nearest)"},
+    "Bilinear": {"en": "Bilinear", "es": "Bilineal", "fr": "Bilinéaire"},
+    "Bilinear nítido": {"en": "Sharp bilinear", "es": "Bilineal nítido", "fr": "Bilinéaire net"},
+    "Anti-aliasing (FXAA)": {"en": "Anti-aliasing (FXAA)", "es": "Suavizado (FXAA)", "fr": "Anticrénelage (FXAA)"},
+    "Nitidez": {"en": "Sharpness", "es": "Nitidez", "fr": "Netteté"},
+    "Brilho": {"en": "Brightness", "es": "Brillo", "fr": "Luminosité"},
+    "Contraste": {"en": "Contrast", "es": "Contraste", "fr": "Contraste"},
+    "Gama": {"en": "Gamma", "es": "Gama", "fr": "Gamma"},
+    "Saturação": {"en": "Saturation", "es": "Saturación", "fr": "Saturation"},
+    "Modo de tela": {"en": "Display mode", "es": "Modo de pantalla", "fr": "Mode d’affichage"},
+    "Janela": {"en": "Windowed", "es": "Ventana", "fr": "Fenêtré"},
+    "Tela cheia sem bordas": {
+        "en": "Borderless fullscreen",
+        "es": "Pantalla completa sin bordes",
+        "fr": "Plein écran sans bordure",
+    },
+    "Tela cheia exclusiva": {
+        "en": "Exclusive fullscreen",
+        "es": "Pantalla completa exclusiva",
+        "fr": "Plein écran exclusif",
+    },
+    "Tela cheia ao apertar F11": {
+        "en": "Fullscreen when pressing F11",
+        "es": "Pantalla completa al pulsar F11",
+        "fr": "Plein écran avec F11",
+    },
+    "Sem bordas": {"en": "Borderless", "es": "Sin bordes", "fr": "Sans bordure"},
+    "Exclusiva": {"en": "Exclusive", "es": "Exclusiva", "fr": "Exclusif"},
+    "Largura da janela": {"en": "Window width", "es": "Ancho de ventana", "fr": "Largeur de la fenêtre"},
+    "Altura da janela": {"en": "Window height", "es": "Alto de ventana", "fr": "Hauteur de la fenêtre"},
+    "Largura em tela cheia exclusiva": {
+        "en": "Exclusive fullscreen width",
+        "es": "Ancho en pantalla completa exclusiva",
+        "fr": "Largeur plein écran exclusif",
+    },
+    "Resolução da área de trabalho": {
+        "en": "Desktop resolution",
+        "es": "Resolución del escritorio",
+        "fr": "Résolution du bureau",
+    },
+    "Altura em tela cheia exclusiva": {
+        "en": "Exclusive fullscreen height",
+        "es": "Alto en pantalla completa exclusiva",
+        "fr": "Hauteur plein écran exclusif",
+    },
+    "Taxa de atualização (tela cheia)": {
+        "en": "Refresh rate (fullscreen)",
+        "es": "Frecuencia de actualización (pantalla completa)",
+        "fr": "Taux de rafraîchissement (plein écran)",
+    },
+    "Taxa da área de trabalho": {"en": "Desktop rate", "es": "Frecuencia del escritorio", "fr": "Fréquence du bureau"},
+    "Proporção da imagem": {"en": "Aspect ratio", "es": "Relación de aspecto", "fr": "Format d’image"},
+    "Esticar para a janela": {"en": "Stretch to window", "es": "Estirar a la ventana", "fr": "Étirer à la fenêtre"},
+    "Automática": {"en": "Automatic", "es": "Automática", "fr": "Automatique"},
+    "Proporção personalizada (larg./alt.)": {
+        "en": "Custom aspect ratio (W/H)",
+        "es": "Relación personalizada (ancho/alto)",
+        "fr": "Format personnalisé (L/H)",
+    },
+    "Escala apenas em números inteiros": {
+        "en": "Integer scaling only",
+        "es": "Escalado solo en números enteros",
+        "fr": "Mise à l’échelle entière uniquement",
+    },
+    "Patch widescreen 16:9": {"en": "16:9 widescreen patch", "es": "Parche panorámico 16:9", "fr": "Correctif écran large 16:9"},
+    "HUD no modo widescreen": {"en": "HUD in widescreen mode", "es": "HUD en modo panorámico", "fr": "ATH en mode écran large"},
+    "Esticar": {"en": "Stretch", "es": "Estirar", "fr": "Étirer"},
+    "Manter 4:3 centralizado": {"en": "Keep 4:3 centered", "es": "Mantener 4:3 centrado", "fr": "Garder 4:3 centré"},
+    "Sincronização (VSync)": {"en": "Synchronization (VSync)", "es": "Sincronización (VSync)", "fr": "Synchronisation (VSync)"},
+    "Mailbox (baixa latência)": {"en": "Mailbox (low latency)", "es": "Mailbox (baja latencia)", "fr": "Mailbox (faible latence)"},
+    "Imediato (sem VSync)": {"en": "Immediate (no VSync)", "es": "Inmediato (sin VSync)", "fr": "Immédiat (sans VSync)"},
+    "Adaptativo": {"en": "Adaptive", "es": "Adaptativo", "fr": "Adaptatif"},
+    "Limite de FPS": {"en": "FPS limit", "es": "Límite de FPS", "fr": "Limite de FPS"},
+    "Sem limite": {"en": "Unlimited", "es": "Sin límite", "fr": "Illimité"},
+    "Mostrar FPS na tela": {"en": "Show FPS on screen", "es": "Mostrar FPS en pantalla", "fr": "Afficher les FPS à l’écran"},
+    "Escala do menu": {"en": "Menu scale", "es": "Escala del menú", "fr": "Échelle du menu"},
+    "Bloquear entrada do jogo nos menus": {
+        "en": "Block game input in menus",
+        "es": "Bloquear entrada del juego en los menús",
+        "fr": "Bloquer les entrées du jeu dans les menus",
+    },
+    "Zona morta do analógico": {"en": "Analog stick deadzone", "es": "Zona muerta del stick", "fr": "Zone morte du stick"},
+    "Sensibilidade do analógico": {
+        "en": "Analog stick sensitivity",
+        "es": "Sensibilidad del stick",
+        "fr": "Sensibilité du stick",
+    },
+    "Zona morta de botões e gatilhos": {
+        "en": "Button and trigger deadzone",
+        "es": "Zona muerta de botones y gatillos",
+        "fr": "Zone morte des boutons et gâchettes",
+    },
+    "Inverter analógico esquerdo": {"en": "Invert left stick", "es": "Invertir stick izquierdo", "fr": "Inverser le stick gauche"},
+    "Nenhum": {"en": "None", "es": "Ninguno", "fr": "Aucun"},
+    "Esquerda/direita": {"en": "Left/right", "es": "Izquierda/derecha", "fr": "Gauche/droite"},
+    "Cima/baixo": {"en": "Up/down", "es": "Arriba/abajo", "fr": "Haut/bas"},
+    "Ambos": {"en": "Both", "es": "Ambos", "fr": "Les deux"},
+    "Inverter analógico direito": {"en": "Invert right stick", "es": "Invertir stick derecho", "fr": "Inverser le stick droit"},
+    "SDL3 não encontrada neste sistema.": {
+        "en": "SDL3 not found on this system.",
+        "es": "SDL3 no encontrada en este sistema.",
+        "fr": "SDL3 introuvable sur ce système.",
+    },
+    "falha ao iniciar": {"en": "failed to initialize", "es": "error al iniciar", "fr": "échec de l’initialisation"},
+    "MAPEAR:": {"en": "MAP:", "es": "MAPEAR:", "fr": "CONFIGURER :"},
+    "TECLADO": {"en": "KEYBOARD", "es": "TECLADO", "fr": "CLAVIER"},
+    "CONTROLE": {"en": "CONTROLLER", "es": "MANDO", "fr": "MANETTE"},
+    "Ação": {"en": "Action", "es": "Acción", "fr": "Action"},
+    "Principal": {"en": "Primary", "es": "Principal", "fr": "Principale"},
+    "Secundária": {"en": "Secondary", "es": "Secondaire", "fr": "Secondaire"},
+    "DEFINIR:": {"en": "BIND:", "es": "ASIGNAR:", "fr": "DÉFINIR :"},
+    "PRINCIPAL": {"en": "PRIMARY", "es": "PRINCIPAL", "fr": "PRINCIPALE"},
+    "SECUNDÁRIA": {"en": "SECONDARY", "es": "SECUNDARIA", "fr": "SECONDAIRE"},
+    "LIMPAR": {"en": "CLEAR", "es": "LIMPIAR", "fr": "EFFACER"},
+    "LISTA…": {"en": "LIST…", "es": "LISTA…", "fr": "LISTE…"},
+    "Tecla #%d": {"en": "Key #%d", "es": "Tecla #%d", "fr": "Touche #%d"},
+    "Código %d": {"en": "Code %d", "es": "Código %d", "fr": "Code %d"},
+    "Pressione uma tecla…": {"en": "Press a key…", "es": "Pulsa una tecla…", "fr": "Appuyez sur une touche…"},
+    "\n(sem entrada neste modo)": {
+        "en": "\n(no input in this mode)",
+        "es": "\n(sin entrada en este modo)",
+        "fr": "\n(aucune entrée dans ce mode)",
+    },
+    "%s\nPrincipal: %s\nSecundária: %s": {
+        "en": "%s\nPrimary: %s\nSecondary: %s",
+        "es": "%s\nPrincipal: %s\nSecundaria: %s",
+        "fr": "%s\nPrincipale : %s\nSecondaire : %s",
+    },
+    "a tecla": {"en": "a key", "es": "una tecla", "fr": "une touche"},
+    "um botão (ou mova um analógico) no controle": {
+        "en": "a button (or move a stick) on the controller",
+        "es": "un botón (o mueve un stick) en el mando",
+        "fr": "un bouton (ou bougez un stick) sur la manette",
+    },
+    "Pressione %s para «%s» (%s). Esc cancela%s.": {
+        "en": "Press %s for “%s” (%s). Esc cancels%s.",
+        "es": "Pulsa %s para «%s» (%s). Esc cancela%s.",
+        "fr": "Appuyez sur %s pour « %s » (%s). Échap annule%s.",
+    },
+    "principal": {"en": "primary", "es": "principal", "fr": "principale"},
+    "secundária": {"en": "secondary", "es": "secundaria", "fr": "secondaire"},
+    ", Delete limpa": {"en": ", Delete clears", "es": ", Supr limpia", "fr": ", Suppr efface"},
+    "Atenção: %s usado em mais de uma ação (em vermelho).": {
+        "en": "Warning: %s is bound to more than one action (in red).",
+        "es": "Atención: %s se usa en más de una acción (en rojo).",
+        "fr": "Attention : %s est utilisé dans plusieurs actions (en rouge).",
+    },
+    "Selecionado: %s. Clique numa célula da tabela, ou use DEFINIR.": {
+        "en": "Selected: %s. Click a table cell, or use BIND.",
+        "es": "Seleccionado: %s. Haz clic en una celda de la tabla o usa ASIGNAR.",
+        "fr": "Sélectionné : %s. Cliquez sur une cellule du tableau ou utilisez DÉFINIR.",
+    },
+    "Sem ações de mapeamento no .ini.": {
+        "en": "No mapping actions found in .ini.",
+        "es": "No hay acciones de mapeo en el .ini.",
+        "fr": "Aucune action de mappage dans le .ini.",
+    },
+    " Escolha na lista.": {"en": " Choose from the list.", "es": " Elige de la lista.", "fr": " Choisissez dans la liste."},
+    "Controle: ": {"en": "Controller: ", "es": "Mando: ", "fr": "Manette : "},
+    "Nenhum controle reconhecido. Conecte um ou use LISTA…": {
+        "en": "No controller detected. Connect one or use LIST…",
+        "es": "Ningún mando reconocido. Conecta uno o usa LISTA…",
+        "fr": "Aucune manette détectée. Connectez-en une ou utilisez LISTE…",
+    },
+    "Tempo esgotado.": {"en": "Timed out.", "es": "Tiempo agotado.", "fr": "Délai expiré."},
+    "A lista serve só para o controle; no teclado, aperte a tecla.": {
+        "en": "The list is only for controllers; on keyboard, press the key.",
+        "es": "La lista es solo para el mando; en el teclado, pulsa la tecla.",
+        "fr": "La liste ne sert que pour la manette ; au clavier, appuyez sur la touche.",
+    },
+    "— Nenhum —": {"en": "— None —", "es": "— Ninguno —", "fr": "— Aucun —"},
+    "Mapear controle": {"en": "Map controller", "es": "Mapear mando", "fr": "Configurer la manette"},
+    "Tecla não reconhecida, tente outra (Esc cancela).": {
+        "en": "Unrecognized key, try another (Esc cancels).",
+        "es": "Tecla no reconocida, prueba otra (Esc cancela).",
+        "fr": "Touche non reconnue, essayez une autre (Échap annule).",
+    },
+    "01  JOGO": {"en": "01  GAME", "es": "01  JUEGO", "fr": "01  JEU"},
+    "02  GRÁFICOS": {"en": "02  GRAPHICS", "es": "02  GRÁFICOS", "fr": "02  GRAPHISMES"},
+    "02 // VÍDEO": {"en": "02 // VIDEO", "es": "02 // VÍDEO", "fr": "02 // VIDÉO"},
+    "Gráficos": {"en": "Graphics", "es": "Gráficos", "fr": "Graphismes"},
+    "03  TELA": {"en": "03  DISPLAY", "es": "03  PANTALLA", "fr": "03  AFFICHAGE"},
+    "03 // EXIBIÇÃO": {"en": "03 // DISPLAY", "es": "03 // PANTALLA", "fr": "03 // AFFICHAGE"},
+    "04  CONTROLES": {"en": "04  CONTROLS", "es": "04  CONTROLES", "fr": "04  CONTRÔLES"},
+    "04 // ENTRADA": {"en": "04 // INPUT", "es": "04 // ENTRADA", "fr": "04 // ENTRÉES"},
+    "Controles": {"en": "Controls", "es": "Controles", "fr": "Contrôles"},
+    "05  MAPEAMENTO": {"en": "05  MAPPING", "es": "05  MAPEO", "fr": "05  MAPPAGE"},
+    "05 // ENTRADA": {"en": "05 // INPUT", "es": "05 // ENTRADA", "fr": "05 // ENTRÉES"},
+    "Mapeamento": {"en": "Mapping", "es": "Mapeo", "fr": "Mappage"},
+    "06  AVANÇADO": {"en": "06  ADVANCED", "es": "06  AVANZADO", "fr": "06  AVANCÉ"},
+    "06 // SISTEMA": {"en": "06 // SYSTEM", "es": "06 // SISTEMA", "fr": "06 // SYSTÈME"},
+    "Avançado": {"en": "Advanced", "es": "Avanzado", "fr": "Avancé"},
+    "07  CONSOLE": {"en": "07  CONSOLE", "es": "07  CONSOLA", "fr": "07  CONSOLE"},
+    "ARRASTE A ISO PARA\nA JANELA  ·  %s": {
+        "en": "DROP THE ISO ONTO\nTHE WINDOW  ·  %s",
+        "es": "ARRASTRA LA ISO A\nLA VENTANA  ·  %s",
+        "fr": "GLISSEZ L’ISO DANS\nLA FENÊTRE  ·  %s",
+    },
+    "Pronto para decolar?": {
+        "en": "Ready for takeoff?",
+        "es": "¿Listo para despegar?",
+        "fr": "Prêt au décollage ?",
+    },
+    "Disco": {"en": "Disc", "es": "Disco", "fr": "Disque"},
+    "Escolha ou arraste a ISO do jogo…": {
+        "en": "Choose or drop the game ISO…",
+        "es": "Elige o arrastra la ISO del juego…",
+        "fr": "Choisissez ou glissez l’ISO du jeu…",
+    },
+    "PROCURAR": {"en": "BROWSE", "es": "EXAMINAR", "fr": "PARCOURIR"},
+    "Inicialização": {"en": "Launch", "es": "Inicio", "fr": "Lancement"},
+    "Executável do jogo": {"en": "Game executable", "es": "Ejecutable del juego", "fr": "Exécutable du jeu"},
+    "Pasta de dados (--data)": {"en": "Data folder (--data)", "es": "Carpeta de datos (--data)", "fr": "Dossier de données (--data)"},
+    "Desligar watchdog (--watchdog 0)": {
+        "en": "Disable watchdog (--watchdog 0)",
+        "es": "Desactivar watchdog (--watchdog 0)",
+        "fr": "Désactiver le watchdog (--watchdog 0)",
+    },
+    "Driver de vídeo SDL": {"en": "SDL video driver", "es": "Controlador de vídeo SDL", "fr": "Pilote vidéo SDL"},
+    "DECOLAR": {"en": "LAUNCH", "es": "DESPEGAR", "fr": "DÉCOLLER"},
+    "PRESET DE HARDWARE:": {"en": "HARDWARE PRESET:", "es": "PREAJUSTE DE HARDWARE:", "fr": "PRÉRÉGLAGE MATÉRIEL :"},
+    "BAIXO": {"en": "LOW", "es": "BAJO", "fr": "BAS"},
+    "MÉDIO": {"en": "MEDIUM", "es": "MEDIO", "fr": "MOYEN"},
+    "ALTO": {"en": "HIGH", "es": "ALTO", "fr": "ÉLEVÉ"},
+    "PRESET RÁPIDO:": {"en": "QUICK PRESET:", "es": "PREAJUSTE RÁPIDO:", "fr": "PRÉRÉGLAGE RAPIDE :"},
+    "Cinematográfico": {"en": "Cinematic", "es": "Cinematográfico", "fr": "Cinématographique"},
+    "Nitidez Máxima": {"en": "Maximum Sharpness", "es": "Nitidez Máxima", "fr": "Netteté Maximale"},
+    "Dados e pastas": {"en": "Data and folders", "es": "Datos y carpetas", "fr": "Données et dossiers"},
+    "Backup e restauração dos cartões de memória (saves/*.ps2mc) e atalhos para as pastas.": {
+        "en": "Backup and restore memory cards (saves/*.ps2mc) and folder shortcuts.",
+        "es": "Copia de seguridad y restauración de tarjetas de memoria (saves/*.ps2mc) y accesos directos a las carpetas.",
+        "fr": "Sauvegarde et restauration des cartes mémoire (saves/*.ps2mc) et raccourcis vers les dossiers.",
+    },
+    "FAZER BACKUP DOS SAVES": {"en": "BACKUP SAVES", "es": "RESPALDAR PARTIDAS", "fr": "SAUVEGARDER LES PARTIES"},
+    "RESTAURAR BACKUP": {"en": "RESTORE BACKUP", "es": "RESTAURAR COPIA", "fr": "RESTAURER UNE SAUVEGARDE"},
+    "ABRIR SAVES": {"en": "OPEN SAVES", "es": "ABRIR PARTIDAS", "fr": "OUVRIR LES SAUVEGARDES"},
+    "ABRIR CAPTURAS (OUT)": {"en": "OPEN CAPTURES (OUT)", "es": "ABRIR CAPTURAS (OUT)", "fr": "OUVRIR LES CAPTURES (OUT)"},
+    "ABRIR PASTA DO JOGO": {"en": "OPEN GAME FOLDER", "es": "ABRIR CARPETA DEL JUEGO", "fr": "OUVRIR LE DOSSIER DU JEU"},
+    "DESCARTAR": {"en": "DISCARD", "es": "DESCARTAR", "fr": "ANNULER"},
+    "PADRÕES": {"en": "DEFAULTS", "es": "PREDETERMINADOS", "fr": "PAR DÉFAUT"},
+    "SALVAR": {"en": "SAVE", "es": "GUARDAR", "fr": "ENREGISTRER"},
+    "07 // TELEMETRIA": {"en": "07 // TELEMETRY", "es": "07 // TELEMETRÍA", "fr": "07 // TÉLÉMÉTRIE"},
+    "Console": {"en": "Console", "es": "Consola", "fr": "Console"},
+    "COPIAR TUDO": {"en": "COPY ALL", "es": "COPIAR TODO", "fr": "TOUT COPIER"},
+    "Escolher ISO do Ace Combat 5": {
+        "en": "Choose Ace Combat 5 ISO",
+        "es": "Elegir ISO de Ace Combat 5",
+        "fr": "Choisir l’ISO d’Ace Combat 5",
+    },
+    "Imagens de disco (*.iso *.ISO);;Todos (*)": {
+        "en": "Disc images (*.iso *.ISO);;All (*)",
+        "es": "Imágenes de disco (*.iso *.ISO);;Todos (*)",
+        "fr": "Images disque (*.iso *.ISO);;Tous (*)",
+    },
+    "AGUARDANDO ISO": {"en": "WAITING FOR ISO", "es": "ESPERANDO ISO", "fr": "EN ATTENTE D’ISO"},
+    "ARQUIVO NÃO ENCONTRADO": {"en": "FILE NOT FOUND", "es": "ARCHIVO NO ENCONTRADO", "fr": "FICHIER INTROUVABLE"},
+    "ISO VERIFICADA // %s": {"en": "ISO VERIFIED // %s", "es": "ISO VERIFICADA // %s", "fr": "ISO VÉRIFIÉE // %s"},
+    "Aviso": {"en": "Warning", "es": "Aviso", "fr": "Avertissement"},
+    "Feche o jogo antes de fazer backup dos saves.": {
+        "en": "Close the game before backing up saves.",
+        "es": "Cierra el juego antes de hacer copia de seguridad de las partidas.",
+        "fr": "Fermez le jeu avant de sauvegarder les parties.",
+    },
+    "Nenhum cartão (*.ps2mc) encontrado na pasta saves/ do jogo.": {
+        "en": "No memory card (*.ps2mc) found in the game saves/ folder.",
+        "es": "No se encontró ninguna tarjeta (*.ps2mc) en la carpeta saves/ del juego.",
+        "fr": "Aucune carte mémoire (*.ps2mc) trouvée dans le dossier saves/ du jeu.",
+    },
+    "[save] Backup criado: %s": {
+        "en": "[save] Backup created: %s",
+        "es": "[save] Copia creada: %s",
+        "fr": "[save] Sauvegarde créée : %s",
+    },
+    "Erro": {"en": "Error", "es": "Error", "fr": "Erreur"},
+    "Falha no backup:\n%s": {"en": "Backup failed:\n%s", "es": "Error en la copia de seguridad:\n%s", "fr": "Échec de la sauvegarde :\n%s"},
+    "Sucesso": {"en": "Success", "es": "Éxito", "fr": "Succès"},
+    "%d cartão(ões) copiado(s) para:\n%s": {
+        "en": "%d card(s) copied to:\n%s",
+        "es": "%d tarjeta(s) copiada(s) a:\n%s",
+        "fr": "%d carte(s) copiée(s) vers :\n%s",
+    },
+    "Feche o jogo antes de restaurar saves.": {
+        "en": "Close the game before restoring saves.",
+        "es": "Cierra el juego antes de restaurar partidas.",
+        "fr": "Fermez le jeu avant de restaurer des sauvegardes.",
+    },
+    "Escolher backup para restaurar": {
+        "en": "Choose backup to restore",
+        "es": "Elegir copia de seguridad para restaurar",
+        "fr": "Choisir une sauvegarde à restaurer",
+    },
+    "Cartão de memória (*.ps2mc)": {
+        "en": "Memory card (*.ps2mc)",
+        "es": "Tarjeta de memoria (*.ps2mc)",
+        "fr": "Carte mémoire (*.ps2mc)",
+    },
+    "Restaurar backup": {"en": "Restore backup", "es": "Restaurar copia", "fr": "Restaurer la sauvegarde"},
+    "Substituir %s por %s?\n\nO arquivo atual será salvo antes.": {
+        "en": "Replace %s with %s?\n\nThe current file will be backed up first.",
+        "es": "¿Reemplazar %s por %s?\n\nEl archivo actual se guardará antes.",
+        "fr": "Remplacer %s par %s ?\n\nLe fichier actuel sera sauvegardé au préalable.",
+    },
+    "Falha ao restaurar:\n%s": {"en": "Restore failed:\n%s", "es": "Error al restaurar:\n%s", "fr": "Échec de la restauration :\n%s"},
+    "[save] Restaurado %s -> %s": {
+        "en": "[save] Restored %s -> %s",
+        "es": "[save] Restaurado %s -> %s",
+        "fr": "[save] Restauré %s -> %s",
+    },
+    "SAVE RESTAURADO: %s": {"en": "SAVE RESTORED: %s", "es": "PARTIDA RESTAURADA: %s", "fr": "SAUVEGARDE RESTAURÉE : %s"},
+    "Pasta do jogo não encontrada:\n%s": {
+        "en": "Game folder not found:\n%s",
+        "es": "Carpeta del juego no encontrada:\n%s",
+        "fr": "Dossier du jeu introuvable :\n%s",
+    },
+    "ALTERAÇÕES PENDENTES // CLIQUE EM SALVAR": {
+        "en": "UNSAVED CHANGES // CLICK SAVE",
+        "es": "CAMBIOS PENDIENTES // HAZ CLIC EN GUARDAR",
+        "fr": "MODIFICATIONS EN ATTENTE // CLIQUEZ SUR ENREGISTRER",
+    },
+    "PRESET '%s' CARREGADO // CLIQUE EM SALVAR PARA APLICAR": {
+        "en": "PRESET '%s' LOADED // CLICK SAVE TO APPLY",
+        "es": "PREAJUSTE '%s' CARGADO // HAZ CLIC EN GUARDAR PARA APLICAR",
+        "fr": "PRÉRÉGLAGE '%s' CHARGÉ // CLIQUEZ SUR ENREGISTRER POUR APPLIQUER",
+    },
+    "SEM OPÇÕES [postfx] NO .INI (rode o jogo uma vez)": {
+        "en": "NO [postfx] OPTIONS IN .INI (run the game once)",
+        "es": "SIN OPCIONES [postfx] EN .INI (ejecuta el juego una vez)",
+        "fr": "AUCUNE OPTION [postfx] DANS .INI (lancez le jeu une fois)",
+    },
+    "PRESET DE HARDWARE '%s' CARREGADO // CLIQUE EM SALVAR PARA APLICAR": {
+        "en": "HARDWARE PRESET '%s' LOADED // CLICK SAVE TO APPLY",
+        "es": "PREAJUSTE DE HARDWARE '%s' CARGADO // HAZ CLIC EN GUARDAR PARA APLICAR",
+        "fr": "PRÉRÉGLAGE MATÉRIEL '%s' CHARGÉ // CLIQUEZ SUR ENREGISTRER POUR APPLIQUER",
+    },
+    "SEM CHAVES CORRESPONDENTES NO .INI (rode o jogo uma vez)": {
+        "en": "NO MATCHING KEYS IN .INI (run the game once)",
+        "es": "SIN CLAVES COINCIDENTES EN .INI (ejecuta el juego una vez)",
+        "fr": "AUCUNE CLÉ CORRESPONDANTE DANS .INI (lancez le jeu une fois)",
+    },
+    "ARQUIVO DE PADRÕES NÃO ENCONTRADO": {
+        "en": "DEFAULTS FILE NOT FOUND",
+        "es": "ARCHIVO DE PREDETERMINADOS NO ENCONTRADO",
+        "fr": "FICHIER PAR DÉFAUT INTROUVABLE",
+    },
+    "Erro ao ler os padrões: %s": {
+        "en": "Error reading defaults: %s",
+        "es": "Error al leer los predeterminados: %s",
+        "fr": "Erreur lors de la lecture des valeurs par défaut : %s",
+    },
+    "%d PADRÕES CARREGADOS // CLIQUE EM SALVAR PARA APLICAR": {
+        "en": "%d DEFAULTS LOADED // CLICK SAVE TO APPLY",
+        "es": "%d PREDETERMINADOS CARGADOS // HAZ CLIC EN GUARDAR PARA APLICAR",
+        "fr": "%d VALEURS PAR DÉFAUT CHARGÉES // CLIQUEZ SUR ENREGISTRER POUR APPLIQUER",
+    },
+    "SEM ac5_settings.ini EM %s (rode o jogo uma vez)": {
+        "en": "NO ac5_settings.ini AT %s (run the game once)",
+        "es": "SIN ac5_settings.ini EN %s (ejecuta el juego una vez)",
+        "fr": "AUCUN ac5_settings.ini DANS %s (lancez le jeu une fois)",
+    },
+    "Erro ao ler o .ini: %s": {"en": "Error reading .ini: %s", "es": "Error al leer el .ini: %s", "fr": "Erreur lors de la lecture du .ini : %s"},
+    "%d OPÇÕES CARREGADAS": {"en": "%d OPTIONS LOADED", "es": "%d OPCIONES CARGADAS", "fr": "%d OPTIONS CHARGÉES"},
+    "Mapeamento de entrada": {"en": "Input mapping", "es": "Mapeo de entrada", "fr": "Mappage des entrées"},
+    "Sem seções [keyboard] ou [controller] no .ini.": {
+        "en": "No [keyboard] or [controller] sections in .ini.",
+        "es": "Sin secciones [keyboard] o [controller] en el .ini.",
+        "fr": "Aucune section [keyboard] ou [controller] dans le .ini.",
+    },
+    "Personalizado (%s)": {"en": "Custom (%s)", "es": "Personalizado (%s)", "fr": "Personnalisé (%s)"},
+    "Não foi possível salvar o .ini:\n%s": {
+        "en": "Could not save .ini:\n%s",
+        "es": "No se pudo guardar el .ini:\n%s",
+        "fr": "Impossible d’enregistrer le .ini :\n%s",
+    },
+    "%d ALTERAÇÃO(ÕES) SALVA(S)": {
+        "en": "%d CHANGE(S) SAVED",
+        "es": "%d CAMBIO(S) GUARDADO(S)",
+        "fr": "%d MODIFICATION(S) ENREGISTRÉE(S)",
+    },
+    "Gerando ps2_image.bin a partir da ISO...": {
+        "en": "Generating ps2_image.bin from ISO...",
+        "es": "Generando ps2_image.bin desde la ISO...",
+        "fr": "Génération de ps2_image.bin depuis l’ISO...",
+    },
+    "ps2_image.bin criado: %s (%d bytes)": {
+        "en": "ps2_image.bin created: %s (%d bytes)",
+        "es": "ps2_image.bin creado: %s (%d bytes)",
+        "fr": "ps2_image.bin créé : %s (%d octets)",
+    },
+    "Executável não encontrado:\n%s": {
+        "en": "Executable not found:\n%s",
+        "es": "Ejecutable no encontrado:\n%s",
+        "fr": "Exécutable introuvable :\n%s",
+    },
+    "Não foi possível gerar o ps2_image.bin:\n%s": {
+        "en": "Could not generate ps2_image.bin:\n%s",
+        "es": "No se pudo generar ps2_image.bin:\n%s",
+        "fr": "Impossible de générer ps2_image.bin :\n%s",
+    },
+    "ABORTAR": {"en": "ABORT", "es": "ABORTAR", "fr": "ARRÊTER"},
+    "[erro do processo: %s]": {"en": "[process error: %s]", "es": "[error del proceso: %s]", "fr": "[erreur du processus : %s]"},
+    "[jogo terminou, código %s%s]": {
+        "en": "[game exited, code %s%s]",
+        "es": "[el juego terminó, código %s%s]",
+        "fr": "[jeu terminé, code %s%s]",
+    },
+    "Jogo em execução": {"en": "Game running", "es": "Juego en ejecución", "fr": "Jeu en cours d’exécution"},
+    "O jogo ainda está em execução. Encerrar e sair?": {
+        "en": "The game is still running. Terminate and quit?",
+        "es": "El juego sigue en ejecución. ¿Terminar y salir?",
+        "fr": "Le jeu est toujours en cours d’exécution. Fermer et quitter ?",
+    },
+    "Falta o Qt6 para Python. Instale com:\n  Linux (Arch): sudo pacman -S pyside6\n  Windows/macOS: pip install PySide6": {
+        "en": "Qt6 for Python is missing. Install with:\n  Linux (Arch): sudo pacman -S pyside6\n  Windows/macOS: pip install PySide6",
+        "es": "Falta Qt6 para Python. Instala con:\n  Linux (Arch): sudo pacman -S pyside6\n  Windows/macOS: pip install PySide6",
+        "fr": "Qt6 pour Python est manquant. Installez-le avec :\n  Linux (Arch) : sudo pacman -S pyside6\n  Windows/macOS : pip install PySide6",
+    },
+    "Uso: ac5_launcher.py --selftest caminho/para/jogo.iso": {
+        "en": "Usage: ac5_launcher.py --selftest path/to/game.iso",
+        "es": "Uso: ac5_launcher.py --selftest ruta/al/juego.iso",
+        "fr": "Utilisation : ac5_launcher.py --selftest chemin/vers/jeu.iso",
+    },
+}
+
+
+def tr(text):
+    if LANG == "pt":
+        return text
+    entry = TRANSLATIONS.get(text)
+    return entry.get(LANG, entry.get("en", text)) if entry else text
+
 IS_WIN = sys.platform.startswith("win")
 IS_MAC = sys.platform == "darwin"
 IS_LINUX = not (IS_WIN or IS_MAC)
@@ -84,12 +710,12 @@ def _read_root_file(f, name_wanted):
     f.seek(16 * SECTOR)
     pvd = f.read(SECTOR)
     if len(pvd) < SECTOR or pvd[1:6] != b"CD001":
-        raise ValueError("Não é uma ISO9660 válida (sem descritor CD001).")
+        raise ValueError(tr("Não é uma ISO9660 válida (sem descritor CD001)."))
     root = pvd[156:190]
     lba = int.from_bytes(root[2:6], "little")
     size = int.from_bytes(root[10:14], "little")
     if not 0 < size <= 1 << 20:
-        raise ValueError("Diretório raiz da ISO inválido.")
+        raise ValueError(tr("Diretório raiz da ISO inválido."))
     f.seek(lba * SECTOR)
     data = f.read(size)
     off = 0
@@ -106,7 +732,7 @@ def _read_root_file(f, name_wanted):
             f.seek(f_lba * SECTOR)
             return f.read(min(f_size, 4096))
         off += rec_len
-    raise ValueError("%s não encontrado na raiz da ISO." % name_wanted)
+    raise ValueError(tr("%s não encontrado na raiz da ISO.") % name_wanted)
 
 
 BOOT2 = re.compile(r"BOOT2\s*=\s*cdrom0:\\?([A-Z]{4})[_-](\d{3})[._]?(\d{2})", re.I)
@@ -117,15 +743,15 @@ def verify_iso(path):
         with open(path, "rb") as f:
             cnf = _read_root_file(f, "SYSTEM.CNF").decode("ascii", "replace")
     except (OSError, ValueError, IndexError) as e:
-        return "invalid", None, str(e) or "Falha ao ler a ISO."
+        return "invalid", None, str(e) or tr("Falha ao ler a ISO.")
     m = BOOT2.search(cnf)
     if not m:
-        return "invalid", None, "SYSTEM.CNF sem linha BOOT2 reconhecível."
+        return "invalid", None, tr("SYSTEM.CNF sem linha BOOT2 reconhecível.")
     serial = "%s_%s.%s" % tuple(g.upper() for g in m.groups())
     if serial == EXPECTED_SERIAL:
-        return "ok", serial, "ISO correta: Ace Combat 5 (USA) [%s]" % serial
-    return "wrong", serial, ("ISO de outro jogo ou região: %s "
-                             "(esperado %s)" % (serial, EXPECTED_SERIAL))
+        return "ok", serial, tr("ISO correta: Ace Combat 5 (USA) [%s]") % serial
+    return "wrong", serial, (tr("ISO de outro jogo ou região: %s "
+                             "(esperado %s)") % (serial, EXPECTED_SERIAL))
 
 
 # ---------------------------------------------------------------------------
@@ -196,10 +822,10 @@ import math
 import os
 import struct
 
-SECTION_TITLES = {"graphics": "Imagem", "postfx": "Pós-processamento",
-                  "display": "Janela e tela", "input": "Entrada",
-                  "analog": "Analógicos", "keyboard": "Teclado",
-                  "controller": "Controle"}
+SECTION_TITLES = {"graphics": tr("Imagem"), "postfx": tr("Pós-processamento"),
+                  "display": tr("Janela e tela"), "input": tr("Entrada"),
+                  "analog": tr("Analógicos"), "keyboard": tr("Teclado"),
+                  "controller": tr("Controle")}
 # Aba que mostra cada seção do .ini; seções desconhecidas vão para "adv".
 PAGE_SECTIONS = {"graphics": "gfx", "postfx": "gfx", "display": "disp",
                  "input": "ctl", "analog": "ctl", "keyboard": "map",
@@ -208,13 +834,13 @@ BIND_SECTIONS = ("keyboard", "controller")
 BIND_NAMES = {
     "select": "Select", "start": "Start", "l1": "L1", "l2": "L2", "l3": "L3",
     "r1": "R1", "r2": "R2", "r3": "R3",
-    "up": "Direcional ↑", "right": "Direcional →", "down": "Direcional ↓",
-    "left": "Direcional ←", "triangle": "Triângulo", "circle": "Círculo",
-    "cross": "X (cruz)", "square": "Quadrado",
-    "lstick_up": "Analógico esq. ↑", "lstick_down": "Analógico esq. ↓",
-    "lstick_left": "Analógico esq. ←", "lstick_right": "Analógico esq. →",
-    "rstick_up": "Analógico dir. ↑", "rstick_down": "Analógico dir. ↓",
-    "rstick_left": "Analógico dir. ←", "rstick_right": "Analógico dir. →",
+    "up": tr("Direcional ↑"), "right": tr("Direcional →"), "down": tr("Direcional ↓"),
+    "left": tr("Direcional ←"), "triangle": tr("Triângulo"), "circle": tr("Círculo"),
+    "cross": tr("X (cruz)"), "square": tr("Quadrado"),
+    "lstick_up": tr("Analógico esq. ↑"), "lstick_down": tr("Analógico esq. ↓"),
+    "lstick_left": tr("Analógico esq. ←"), "lstick_right": tr("Analógico esq. →"),
+    "rstick_up": tr("Analógico dir. ↑"), "rstick_down": tr("Analógico dir. ↓"),
+    "rstick_left": tr("Analógico dir. ←"), "rstick_right": tr("Analógico dir. →"),
 }
 ACTION_ORDER = ["cross", "circle", "square", "triangle", "l1", "l2", "r1", "r2",
                 "l3", "r3", "select", "start", "up", "down", "left", "right",
@@ -228,13 +854,13 @@ _KEYS = [
     (15, 43, "Tab"), (16, 20, "Q"), (17, 26, "W"), (18, 8, "E"), (19, 21, "R"),
     (20, 23, "T"), (21, 28, "Y"), (22, 24, "U"), (23, 12, "I"), (24, 18, "O"),
     (25, 19, "P"), (26, 47, "["), (27, 48, "]"), (28, 40, "Enter"),
-    (29, 224, "Ctrl esq."), (30, 4, "A"), (31, 22, "S"), (32, 7, "D"),
+    (29, 224, tr("Ctrl esq.")), (30, 4, "A"), (31, 22, "S"), (32, 7, "D"),
     (33, 9, "F"), (34, 10, "G"), (35, 11, "H"), (36, 13, "J"), (37, 14, "K"),
     (38, 15, "L"), (39, 51, ";"), (40, 52, "'"), (41, 53, "`"),
-    (42, 225, "Shift esq."), (43, 49, "\\"), (44, 29, "Z"), (45, 27, "X"),
+    (42, 225, tr("Shift esq.")), (43, 49, "\\"), (44, 29, "Z"), (45, 27, "X"),
     (46, 6, "C"), (47, 25, "V"), (48, 5, "B"), (49, 17, "N"), (50, 16, "M"),
-    (51, 54, ","), (52, 55, "."), (53, 56, "/"), (54, 229, "Shift dir."),
-    (55, 85, "Num *"), (56, 226, "Alt esq."), (57, 44, "Espaço"),
+    (51, 54, ","), (52, 55, "."), (53, 56, "/"), (54, 229, tr("Shift dir.")),
+    (55, 85, "Num *"), (56, 226, tr("Alt esq.")), (57, 44, tr("Espaço")),
     (58, 57, "Caps Lock"), (59, 58, "F1"), (60, 59, "F2"), (61, 60, "F3"),
     (62, 61, "F4"), (63, 62, "F5"), (64, 63, "F6"), (65, 64, "F7"),
     (66, 65, "F8"), (67, 66, "F9"), (68, 67, "F10"), (69, 83, "Num Lock"),
@@ -243,31 +869,31 @@ _KEYS = [
     (77, 94, "Num 6"), (78, 87, "Num +"), (79, 89, "Num 1"), (80, 90, "Num 2"),
     (81, 91, "Num 3"), (82, 98, "Num 0"), (83, 99, "Num ."), (86, 100, "< >"),
     (87, 68, "F11"), (88, 69, "F12"), (96, 88, "Num Enter"),
-    (97, 228, "Ctrl dir."), (98, 84, "Num /"), (99, 70, "Print Screen"),
-    (100, 230, "Alt dir."), (102, 74, "Home"), (103, 82, "Seta ↑"),
-    (104, 75, "Page Up"), (105, 80, "Seta ←"), (106, 79, "Seta →"),
-    (107, 77, "End"), (108, 81, "Seta ↓"), (109, 78, "Page Down"),
+    (97, 228, tr("Ctrl dir.")), (98, 84, "Num /"), (99, 70, "Print Screen"),
+    (100, 230, tr("Alt dir.")), (102, 74, "Home"), (103, 82, tr("Seta ↑")),
+    (104, 75, "Page Up"), (105, 80, tr("Seta ←")), (106, 79, tr("Seta →")),
+    (107, 77, "End"), (108, 81, tr("Seta ↓")), (109, 78, "Page Down"),
     (110, 73, "Insert"), (111, 76, "Delete"), (119, 72, "Pause"),
-    (125, 227, "Meta esq."), (126, 231, "Meta dir."),
+    (125, 227, tr("Meta esq.")), (126, 231, tr("Meta dir.")),
 ]
 EVDEV_TO_SDL = {e: s for e, s, _n in _KEYS}
 KEY_NAME = {s: n for _e, s, n in _KEYS}
 # Controle (SDL3): botão = 1 + SDL_GAMEPAD_BUTTON; eixo = 256 | eixo << 1 | positivo
 # (código, nome completo, nome curto)
 PAD_INPUTS = [
-    (1, "A (Cruz)", "A"), (2, "B (Bola)", "B"), (3, "X (Quadrado)", "X"),
-    (4, "Y (Triângulo)", "Y"), (5, "Back / Select", "Back"),
-    (6, "Guide / Home", "Guide"), (7, "Start", "Start"),
-    (8, "Clique do analógico esquerdo (L3)", "L3"),
-    (9, "Clique do analógico direito (R3)", "R3"),
+    (1, tr("A (Cruz)"), "A"), (2, tr("B (Bola)"), "B"), (3, tr("X (Quadrado)"), "X"),
+    (4, tr("Y (Triângulo)"), "Y"), (5, "Back / Select", "Back"),
+    (6, tr("Guide / Home"), "Guide"), (7, "Start", "Start"),
+    (8, tr("Clique do analógico esquerdo (L3)"), "L3"),
+    (9, tr("Clique do analógico direito (R3)"), "R3"),
     (10, "LB / L1", "LB"), (11, "RB / R1", "RB"),
-    (12, "Direcional ↑", "↑"), (13, "Direcional ↓", "↓"),
-    (14, "Direcional ←", "←"), (15, "Direcional →", "→"),
-    (256, "Analógico esquerdo ←", "LS ←"), (257, "Analógico esquerdo →", "LS →"),
-    (258, "Analógico esquerdo ↑", "LS ↑"), (259, "Analógico esquerdo ↓", "LS ↓"),
-    (260, "Analógico direito ←", "RS ←"), (261, "Analógico direito →", "RS →"),
-    (262, "Analógico direito ↑", "RS ↑"), (263, "Analógico direito ↓", "RS ↓"),
-    (265, "Gatilho esquerdo (LT / L2)", "LT"), (267, "Gatilho direito (RT / R2)", "RT"),
+    (12, tr("Direcional ↑"), "↑"), (13, tr("Direcional ↓"), "↓"),
+    (14, tr("Direcional ←"), "←"), (15, tr("Direcional →"), "→"),
+    (256, tr("Analógico esquerdo ←"), "LS ←"), (257, tr("Analógico esquerdo →"), "LS →"),
+    (258, tr("Analógico esquerdo ↑"), "LS ↑"), (259, tr("Analógico esquerdo ↓"), "LS ↓"),
+    (260, tr("Analógico direito ←"), "RS ←"), (261, tr("Analógico direito →"), "RS →"),
+    (262, tr("Analógico direito ↑"), "RS ↑"), (263, tr("Analógico direito ↓"), "RS ↓"),
+    (265, tr("Gatilho esquerdo (LT / L2)"), "LT"), (267, tr("Gatilho direito (RT / R2)"), "RT"),
 ]
 PAD_NAME = {c: (n, sn) for c, n, sn in PAD_INPUTS}
 PAD_BY_NAME = {n: c for c, n, _sn in PAD_INPUTS}
@@ -285,11 +911,11 @@ def page_of(sec):
     return PAGE_SECTIONS.get(sec, "adv")
 
 
-ANISO = [("Desligado", "1"), ("2x", "2"), ("4x", "4"), ("8x", "8"), ("16x", "16")]
+ANISO = [(tr("Desligado"), "1"), ("2x", "2"), ("4x", "4"), ("8x", "8"), ("16x", "16")]
 BOOL_STYLES = [("1", "0"), ("true", "false"), ("yes", "no"), ("on", "off")]
 # Resolução interna: 0 = automática, N = N x 640x448 (nativa do PS2)
-INTERNAL_RES = [("Automática (cobre a janela)", "0")] + [
-    ("%dx  ·  %d×%d%s" % (n, 640 * n, 448 * n, " (nativa)" if n == 1 else ""), str(n))
+INTERNAL_RES = [(tr("Automática (cobre a janela)"), "0")] + [
+    ("%dx  ·  %d×%d%s" % (n, 640 * n, 448 * n, tr(" (nativa)") if n == 1 else ""), str(n))
     for n in range(1, 9)]
 
 
@@ -326,59 +952,59 @@ HW_PRESETS = {
 #   check  | slider lo hi | combo itens | spin lo hi sufixo especial
 #   dspin lo hi casas sufixo especial
 CURATED = {
-    ("graphics", "preset"): ("combo", "Qualidade (preset)", [
-        ("Baixa", "0"), ("Média", "1"), ("Alta", "2"), ("Ultra", "3"),
-        ("Personalizada", "4")]),
-    ("graphics", "internal_resolution"): ("combo", "Resolução interna", INTERNAL_RES),
-    ("graphics", "texture_filter"): ("combo", "Filtro de textura", [
-        ("Como o jogo pede", "0"), ("Forçar pixelado (nearest)", "1"),
-        ("Forçar bilinear", "2")]),
-    ("graphics", "anisotropy"): ("combo", "Filtragem anisotrópica", ANISO),
-    ("graphics", "deinterlace"): ("check", "Desentrelaçamento (junta os campos)"),
-    ("graphics", "scale_filter"): ("combo", "Filtro de escala", [
-        ("Pixelado (nearest)", "0"), ("Bilinear", "1"), ("Bilinear nítido", "2")]),
-    ("postfx", "fxaa"): ("check", "Anti-aliasing (FXAA)"),
-    ("postfx", "sharpen"): ("slider", "Nitidez", 0.0, 1.0),
-    ("postfx", "brightness"): ("slider", "Brilho", -0.5, 0.5),
-    ("postfx", "contrast"): ("slider", "Contraste", 0.5, 1.5),
-    ("postfx", "gamma"): ("slider", "Gama", 0.5, 2.0),
-    ("postfx", "saturation"): ("slider", "Saturação", 0.0, 2.0),
-    ("display", "window_mode"): ("combo", "Modo de tela", [
-        ("Janela", "0"), ("Tela cheia sem bordas", "1"),
-        ("Tela cheia exclusiva", "2")]),
-    ("display", "fullscreen_type"): ("combo", "Tela cheia ao apertar F11", [
-        ("Sem bordas", "1"), ("Exclusiva", "2")]),
-    ("display", "window_width"): ("spin", "Largura da janela", 320, 7680, " px", None),
-    ("display", "window_height"): ("spin", "Altura da janela", 240, 4320, " px", None),
-    ("display", "fullscreen_width"): ("spin", "Largura em tela cheia exclusiva",
-                                      0, 7680, " px", "Resolução da área de trabalho"),
-    ("display", "fullscreen_height"): ("spin", "Altura em tela cheia exclusiva",
-                                       0, 4320, " px", "Resolução da área de trabalho"),
-    ("display", "fullscreen_refresh"): ("dspin", "Taxa de atualização (tela cheia)",
-                                        0.0, 1000.0, 2, " Hz", "Taxa da área de trabalho"),
-    ("display", "aspect"): ("combo", "Proporção da imagem", [
-        ("Esticar para a janela", "0"), ("Automática", "1"), ("4:3", "2"),
-        ("16:9", "3"), ("Personalizada", "4")]),
-    ("display", "aspect_custom"): ("dspin", "Proporção personalizada (larg./alt.)",
+    ("graphics", "preset"): ("combo", tr("Qualidade (preset)"), [
+        (tr("Baixa"), "0"), (tr("Média"), "1"), (tr("Alta"), "2"), ("Ultra", "3"),
+        (tr("Personalizada"), "4")]),
+    ("graphics", "internal_resolution"): ("combo", tr("Resolução interna"), INTERNAL_RES),
+    ("graphics", "texture_filter"): ("combo", tr("Filtro de textura"), [
+        (tr("Como o jogo pede"), "0"), (tr("Forçar pixelado (nearest)"), "1"),
+        (tr("Forçar bilinear"), "2")]),
+    ("graphics", "anisotropy"): ("combo", tr("Filtragem anisotrópica"), ANISO),
+    ("graphics", "deinterlace"): ("check", tr("Desentrelaçamento (junta os campos)")),
+    ("graphics", "scale_filter"): ("combo", tr("Filtro de escala"), [
+        (tr("Pixelado (nearest)"), "0"), (tr("Bilinear"), "1"), (tr("Bilinear nítido"), "2")]),
+    ("postfx", "fxaa"): ("check", tr("Anti-aliasing (FXAA)")),
+    ("postfx", "sharpen"): ("slider", tr("Nitidez"), 0.0, 1.0),
+    ("postfx", "brightness"): ("slider", tr("Brilho"), -0.5, 0.5),
+    ("postfx", "contrast"): ("slider", tr("Contraste"), 0.5, 1.5),
+    ("postfx", "gamma"): ("slider", tr("Gama"), 0.5, 2.0),
+    ("postfx", "saturation"): ("slider", tr("Saturação"), 0.0, 2.0),
+    ("display", "window_mode"): ("combo", tr("Modo de tela"), [
+        (tr("Janela"), "0"), (tr("Tela cheia sem bordas"), "1"),
+        (tr("Tela cheia exclusiva"), "2")]),
+    ("display", "fullscreen_type"): ("combo", tr("Tela cheia ao apertar F11"), [
+        (tr("Sem bordas"), "1"), (tr("Exclusiva"), "2")]),
+    ("display", "window_width"): ("spin", tr("Largura da janela"), 320, 7680, " px", None),
+    ("display", "window_height"): ("spin", tr("Altura da janela"), 240, 4320, " px", None),
+    ("display", "fullscreen_width"): ("spin", tr("Largura em tela cheia exclusiva"),
+                                      0, 7680, " px", tr("Resolução da área de trabalho")),
+    ("display", "fullscreen_height"): ("spin", tr("Altura em tela cheia exclusiva"),
+                                       0, 4320, " px", tr("Resolução da área de trabalho")),
+    ("display", "fullscreen_refresh"): ("dspin", tr("Taxa de atualização (tela cheia)"),
+                                        0.0, 1000.0, 2, " Hz", tr("Taxa da área de trabalho")),
+    ("display", "aspect"): ("combo", tr("Proporção da imagem"), [
+        (tr("Esticar para a janela"), "0"), (tr("Automática"), "1"), ("4:3", "2"),
+        ("16:9", "3"), (tr("Personalizada"), "4")]),
+    ("display", "aspect_custom"): ("dspin", tr("Proporção personalizada (larg./alt.)"),
                                    0.5, 4.0, 3, "", None),
-    ("display", "integer_scale"): ("check", "Escala apenas em números inteiros"),
-    ("display", "widescreen"): ("check", "Patch widescreen 16:9"),
-    ("display", "hud_layout"): ("combo", "HUD no modo widescreen", [
-        ("Esticar", "0"), ("Manter 4:3 centralizado", "1")]),
-    ("display", "present_mode"): ("combo", "Sincronização (VSync)", [
-        ("Mailbox (baixa latência)", "0"), ("VSync (FIFO)", "1"),
-        ("Imediato (sem VSync)", "2"), ("Adaptativo", "3")]),
-    ("display", "fps_limit"): ("spin", "Limite de FPS", 0, 1000, " FPS", "Sem limite"),
-    ("display", "show_fps"): ("check", "Mostrar FPS na tela"),
-    ("display", "menu_scale"): ("slider", "Escala do menu", 0.5, 3.0),
-    ("input", "block_game_input_in_menu"): ("check", "Bloquear entrada do jogo nos menus"),
-    ("analog", "deadzone"): ("slider", "Zona morta do analógico", 0.0, 1.0),
-    ("analog", "axis_scale"): ("slider", "Sensibilidade do analógico", 0.01, 2.0),
-    ("analog", "button_deadzone"): ("slider", "Zona morta de botões e gatilhos", 0.0, 1.0),
-    ("analog", "invert_left"): ("combo", "Inverter analógico esquerdo", [
-        ("Nenhum", "0"), ("Esquerda/direita", "1"), ("Cima/baixo", "2"), ("Ambos", "3")]),
-    ("analog", "invert_right"): ("combo", "Inverter analógico direito", [
-        ("Nenhum", "0"), ("Esquerda/direita", "1"), ("Cima/baixo", "2"), ("Ambos", "3")]),
+    ("display", "integer_scale"): ("check", tr("Escala apenas em números inteiros")),
+    ("display", "widescreen"): ("check", tr("Patch widescreen 16:9")),
+    ("display", "hud_layout"): ("combo", tr("HUD no modo widescreen"), [
+        (tr("Esticar"), "0"), (tr("Manter 4:3 centralizado"), "1")]),
+    ("display", "present_mode"): ("combo", tr("Sincronização (VSync)"), [
+        (tr("Mailbox (baixa latência)"), "0"), ("VSync (FIFO)", "1"),
+        (tr("Imediato (sem VSync)"), "2"), (tr("Adaptativo"), "3")]),
+    ("display", "fps_limit"): ("spin", tr("Limite de FPS"), 0, 1000, " FPS", tr("Sem limite")),
+    ("display", "show_fps"): ("check", tr("Mostrar FPS na tela")),
+    ("display", "menu_scale"): ("slider", tr("Escala do menu"), 0.5, 3.0),
+    ("input", "block_game_input_in_menu"): ("check", tr("Bloquear entrada do jogo nos menus")),
+    ("analog", "deadzone"): ("slider", tr("Zona morta do analógico"), 0.0, 1.0),
+    ("analog", "axis_scale"): ("slider", tr("Sensibilidade do analógico"), 0.01, 2.0),
+    ("analog", "button_deadzone"): ("slider", tr("Zona morta de botões e gatilhos"), 0.0, 1.0),
+    ("analog", "invert_left"): ("combo", tr("Inverter analógico esquerdo"), [
+        (tr("Nenhum"), "0"), (tr("Esquerda/direita"), "1"), (tr("Cima/baixo"), "2"), (tr("Ambos"), "3")]),
+    ("analog", "invert_right"): ("combo", tr("Inverter analógico direito"), [
+        (tr("Nenhum"), "0"), (tr("Esquerda/direita"), "1"), (tr("Cima/baixo"), "2"), (tr("Ambos"), "3")]),
 }
 
 PAL = {"@BG": "#0a0e13", "@LINE": "#1d2a38", "@TEXT": "#dfe8f1",
@@ -748,11 +1374,11 @@ class PadReader:
     def start(self):
         """Devolve "" se deu certo, ou a mensagem do problema."""
         if self.lib is None:
-            return "SDL3 não encontrada neste sistema."
+            return tr("SDL3 não encontrada neste sistema.")
         self.lib.SDL_SetHint(b"SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", b"1")
         if not self.lib.SDL_Init(self.GAMEPAD):
             err = self.lib.SDL_GetError()
-            return "SDL3: " + (err.decode("utf-8", "replace") if err else "falha ao iniciar")
+            return "SDL3: " + (err.decode("utf-8", "replace") if err else tr("falha ao iniciar"))
         self.up = True
         self.refresh()
         return ""
@@ -999,9 +1625,9 @@ class MappingEditor(W.QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(12)
         top = W.QHBoxLayout()
-        top.addWidget(lbl("MAPEAR:", "tag"))
+        top.addWidget(lbl(tr("MAPEAR:"), "tag"))
         self.mode_btns = {}
-        for m, text in (("keyboard", "TECLADO"), ("controller", "CONTROLE")):
+        for m, text in (("keyboard", tr("TECLADO")), ("controller", tr("CONTROLE"))):
             b = ghost(text, lambda _=False, m=m: self.set_mode(m))
             b.setCheckable(True)
             self.mode_btns[m] = b
@@ -1015,7 +1641,7 @@ class MappingEditor(W.QWidget):
         body.addWidget(self.pad, 3)
         right = W.QVBoxLayout()
         t = W.QTableWidget(len(self.actions), 3)
-        t.setHorizontalHeaderLabels(["Ação", "Principal", "Secundária"])
+        t.setHorizontalHeaderLabels([tr("Ação"), tr("Principal"), tr("Secundária")])
         t.verticalHeader().setVisible(False)
         t.setEditTriggers(W.QAbstractItemView.EditTrigger.NoEditTriggers)
         t.setSelectionBehavior(W.QAbstractItemView.SelectionBehavior.SelectRows)
@@ -1029,14 +1655,14 @@ class MappingEditor(W.QWidget):
         self.table = t
         right.addWidget(t, 1)
         br = W.QHBoxLayout()
-        br.addWidget(lbl("DEFINIR:", "tag"))
-        br.addWidget(ghost("PRINCIPAL", lambda: self.begin(self.sel, 0)))
-        br.addWidget(ghost("SECUNDÁRIA", lambda: self.begin(self.sel, 1)))
+        br.addWidget(lbl(tr("DEFINIR:"), "tag"))
+        br.addWidget(ghost(tr("PRINCIPAL"), lambda: self.begin(self.sel, 0)))
+        br.addWidget(ghost(tr("SECUNDÁRIA"), lambda: self.begin(self.sel, 1)))
         br.addStretch()
         right.addLayout(br)
         br2 = W.QHBoxLayout()
-        br2.addWidget(ghost("LIMPAR", self.clear_sel))
-        br2.addWidget(ghost("LISTA…", self.list_sel))
+        br2.addWidget(ghost(tr("LIMPAR"), self.clear_sel))
+        br2.addWidget(ghost(tr("LISTA…"), self.list_sel))
         br2.addStretch()
         right.addLayout(br2)
         body.addLayout(right, 2)
@@ -1051,9 +1677,9 @@ class MappingEditor(W.QWidget):
         if not code:
             return "—"
         if self.mode == "keyboard":
-            return KEY_NAME.get(code, "Tecla #%d" % code)
+            return KEY_NAME.get(code, tr("Tecla #%d") % code)
         n = PAD_NAME.get(code)
-        return (n[1] if short else n[0]) if n else "Código %d" % code
+        return (n[1] if short else n[0]) if n else tr("Código %d") % code
 
     def conflicts(self, mode):
         used = {}
@@ -1076,7 +1702,7 @@ class MappingEditor(W.QWidget):
                 if e is None:
                     text = "—"
                 elif self.cap == (a, slot):
-                    text = "Pressione uma tecla…"
+                    text = tr("Pressione uma tecla…")
                 else:
                     text = self.code_name(e["vals"][slot])
                 it = W.QTableWidgetItem(text)
@@ -1087,11 +1713,11 @@ class MappingEditor(W.QWidget):
                     it.setForeground(red)
                 t.setItem(r, 1 + slot, it)
             if e is None:
-                tips[a] = name + "\n(sem entrada neste modo)"
+                tips[a] = name + tr("\n(sem entrada neste modo)")
                 continue
             short = [self.code_name(c, True) for c in e["vals"] if c]
             caps[a] = " · ".join(short) if short else "—"
-            tips[a] = "%s\nPrincipal: %s\nSecundária: %s" % (
+            tips[a] = tr("%s\nPrincipal: %s\nSecundária: %s") % (
                 name, self.code_name(e["vals"][0]), self.code_name(e["vals"][1]))
         self.pad.caps, self.pad.tips, self.pad.sel = caps, tips, self.sel
         self.pad.update()
@@ -1101,22 +1727,22 @@ class MappingEditor(W.QWidget):
             t.selectRow(self.actions.index(self.sel))
         if self.cap:
             a, slot = self.cap
-            what = "a tecla" if self.mode == "keyboard" else "um botão (ou mova um analógico) no controle"
-            msg = ("Pressione %s para «%s» (%s). Esc cancela%s."
-                   % (what, BIND_NAMES.get(a, a), "principal" if slot == 0 else "secundária",
-                      ", Delete limpa" if self.mode == "keyboard" else ""))
+            what = tr("a tecla") if self.mode == "keyboard" else tr("um botão (ou mova um analógico) no controle")
+            msg = (tr("Pressione %s para «%s» (%s). Esc cancela%s.")
+                   % (what, BIND_NAMES.get(a, a), tr("principal") if slot == 0 else tr("secundária"),
+                      tr(", Delete limpa") if self.mode == "keyboard" else ""))
             if self.hint:
                 msg += "  " + self.hint
         elif dup:
-            msg = "Atenção: %s usado em mais de uma ação (em vermelho)." % ", ".join(
+            msg = tr("Atenção: %s usado em mais de uma ação (em vermelho).") % ", ".join(
                 self.code_name(c) for c in dup)
         elif self.sel:
-            msg = ("Selecionado: %s. Clique numa célula da tabela, ou use DEFINIR."
+            msg = (tr("Selecionado: %s. Clique numa célula da tabela, ou use DEFINIR.")
                    % BIND_NAMES.get(self.sel, self.sel))
             if self.hint:
                 msg += "  " + self.hint
         else:
-            msg = "Sem ações de mapeamento no .ini."
+            msg = tr("Sem ações de mapeamento no .ini.")
         self.status.setText(msg)
 
     # ---------- interação ----------
@@ -1160,7 +1786,7 @@ class MappingEditor(W.QWidget):
         rd = PadReader()
         err = rd.start()
         if err:
-            self.hint = err + " Escolha na lista."
+            self.hint = err + tr(" Escolha na lista.")
             self.begin_list(action, slot)
             return
         self.hint, self.ticks, self.reader = "", 0, rd
@@ -1182,18 +1808,18 @@ class MappingEditor(W.QWidget):
             action, slot = self.cap
             self.assign(action, slot, code)
         elif rd.pads and not self.hint:
-            self.hint = "Controle: " + ", ".join(rd.names())
+            self.hint = tr("Controle: ") + ", ".join(rd.names())
             self.refresh()
         elif self.ticks == 90 and not rd.pads:
-            self.hint = "Nenhum controle reconhecido. Conecte um ou use LISTA…"
+            self.hint = tr("Nenhum controle reconhecido. Conecte um ou use LISTA…")
             self.refresh()
         elif self.ticks > 900:
-            self.hint = "Tempo esgotado."
+            self.hint = tr("Tempo esgotado.")
             self.cancel()
 
     def list_sel(self):
         if self.mode != "controller":
-            self.hint = "A lista serve só para o controle; no teclado, aperte a tecla."
+            self.hint = tr("A lista serve só para o controle; no teclado, aperte a tecla.")
             self.refresh()
             return
         self.begin_list(self.sel, self.cap[1] if self.cap else 0)
@@ -1203,12 +1829,12 @@ class MappingEditor(W.QWidget):
         if e is None:
             return
         self.cancel(False)
-        items = ["— Nenhum —"] + [n for _c, n, _s in PAD_INPUTS]
+        items = [tr("— Nenhum —")] + [n for _c, n, _s in PAD_INPUTS]
         cur = PAD_NAME.get(e["vals"][slot])
         name, ok = W.QInputDialog.getItem(
-            self, "Mapear controle",
+            self, tr("Mapear controle"),
             "%s (%s):" % (BIND_NAMES.get(action, action),
-                          "principal" if slot == 0 else "secundária"),
+                          tr("principal") if slot == 0 else tr("secundária")),
             items, items.index(cur[0]) if cur else 0, False)
         if ok:
             self.assign_pad(action, slot, name)
@@ -1268,7 +1894,7 @@ class MappingEditor(W.QWidget):
             return
         code = key_to_sdl(e)
         if not code:
-            self.status.setText("Tecla não reconhecida, tente outra (Esc cancela).")
+            self.status.setText(tr("Tecla não reconhecida, tente outra (Esc cancela)."))
             return
         self.assign(action, slot, code)
 
@@ -1341,13 +1967,13 @@ class Launcher(W.QMainWindow):
 
         self.stack = W.QStackedWidget()
         self.navs = []
-        pages = [("01  JOGO", self.page_game()),
-                 ("02  GRÁFICOS", self.page_settings("02 // VÍDEO", "Gráficos", "gfx")),
-                 ("03  TELA", self.page_settings("03 // EXIBIÇÃO", "Janela e tela", "disp")),
-                 ("04  CONTROLES", self.page_settings("04 // ENTRADA", "Controles", "ctl")),
-                 ("05  MAPEAMENTO", self.page_settings("05 // ENTRADA", "Mapeamento", "map")),
-                 ("06  AVANÇADO", self.page_settings("06 // SISTEMA", "Avançado", "adv")),
-                 ("07  CONSOLE", self.page_console())]
+        pages = [(tr("01  JOGO"), self.page_game()),
+                 (tr("02  GRÁFICOS"), self.page_settings(tr("02 // VÍDEO"), tr("Gráficos"), "gfx")),
+                 (tr("03  TELA"), self.page_settings(tr("03 // EXIBIÇÃO"), tr("Janela e tela"), "disp")),
+                 (tr("04  CONTROLES"), self.page_settings(tr("04 // ENTRADA"), tr("Controles"), "ctl")),
+                 (tr("05  MAPEAMENTO"), self.page_settings(tr("05 // ENTRADA"), tr("Mapeamento"), "map")),
+                 (tr("06  AVANÇADO"), self.page_settings(tr("06 // SISTEMA"), tr("Avançado"), "adv")),
+                 (tr("07  CONSOLE"), self.page_console())]
         for i, (name, page) in enumerate(pages):
             b = W.QPushButton(name)
             b.setObjectName("nav")
@@ -1360,7 +1986,7 @@ class Launcher(W.QMainWindow):
             self.stack.addWidget(page)
         self.navs[0].setChecked(True)
         sl.addStretch()
-        foot = lbl("ARRASTE A ISO PARA\nA JANELA  ·  %s" % PLAT_DIR.upper(), "muted", 1)
+        foot = lbl(tr("ARRASTE A ISO PARA\nA JANELA  ·  %s") % PLAT_DIR.upper(), "muted", 1)
         foot.setContentsMargins(20, 0, 0, 0)
         sl.addWidget(foot)
         h.addWidget(side)
@@ -1390,12 +2016,12 @@ class Launcher(W.QMainWindow):
         v = W.QVBoxLayout(page)
         v.setContentsMargins(36, 30, 36, 26)
         v.setSpacing(18)
-        v.addLayout(header("01 // BRIEFING", "Pronto para decolar?"))
+        v.addLayout(header("01 // BRIEFING", tr("Pronto para decolar?")))
 
-        c, cl = card("Disco")
+        c, cl = card(tr("Disco"))
         r = W.QHBoxLayout()
         self.iso = W.QLineEdit(self.cfg.get("iso", ""))
-        self.iso.setPlaceholderText("Escolha ou arraste a ISO do jogo…")
+        self.iso.setPlaceholderText(tr("Escolha ou arraste a ISO do jogo…"))
         # debounce: não abre a ISO a cada tecla digitada
         self.iso_timer = QtCore.QTimer(self)
         self.iso_timer.setSingleShot(True)
@@ -1403,7 +2029,7 @@ class Launcher(W.QMainWindow):
         self.iso_timer.timeout.connect(self.check_iso)
         self.iso.textChanged.connect(lambda _t: self.iso_timer.start())
         r.addWidget(self.iso, 1)
-        r.addWidget(ghost("PROCURAR", self.browse))
+        r.addWidget(ghost(tr("PROCURAR"), self.browse))
         cl.addLayout(r)
         self.st_title = lbl("", "readout")
         self.st_detail = lbl("", "muted")
@@ -1411,7 +2037,7 @@ class Launcher(W.QMainWindow):
         cl.addWidget(self.st_detail)
         v.addWidget(c)
 
-        c2, c2l = card("Inicialização")
+        c2, c2l = card(tr("Inicialização"))
         self.exe_edit = W.QLineEdit(self.cfg.get("exe") or str(find_exe()))
         self.exe_edit.setMinimumWidth(380)
         self.exe_edit.editingFinished.connect(lambda: (self.build_settings(),
@@ -1423,11 +2049,11 @@ class Launcher(W.QMainWindow):
         self.drv.setCurrentText(self.cfg.get("driver", "auto"))
         self.data = W.QLineEdit(self.cfg.get("data", "generated"))
         self.data.setFixedWidth(200)
-        rows = [("Executável do jogo", self.exe_edit),
-                ("Pasta de dados (--data)", self.data),
-                ("Desligar watchdog (--watchdog 0)", self.wd)]
+        rows = [(tr("Executável do jogo"), self.exe_edit),
+                (tr("Pasta de dados (--data)"), self.data),
+                (tr("Desligar watchdog (--watchdog 0)"), self.wd)]
         if IS_LINUX:
-            rows += [("MangoHud", self.mango), ("Driver de vídeo SDL", self.drv)]
+            rows += [("MangoHud", self.mango), (tr("Driver de vídeo SDL"), self.drv)]
         for lab, w in rows:
             c2l.addLayout(row(lab, w))
         for w, sig in ((self.mango, "toggled"), (self.wd, "toggled"),
@@ -1435,7 +2061,7 @@ class Launcher(W.QMainWindow):
             getattr(w, sig).connect(lambda *_: self.refresh_cmd())
         v.addWidget(c2)
 
-        self.play_btn = HudButton("DECOLAR")
+        self.play_btn = HudButton(tr("DECOLAR"))
         self.play_btn.clicked.connect(self.play)
         v.addSpacing(4)
         v.addWidget(self.play_btn, 0, Qt.AlignmentFlag.AlignHCenter)
@@ -1456,18 +2082,18 @@ class Launcher(W.QMainWindow):
 
         if key == "gfx":
             hbar = W.QHBoxLayout()
-            hbar.addWidget(lbl("PRESET DE HARDWARE:", "tag"))
-            hbar.addWidget(ghost("BAIXO", lambda: self.apply_hw_preset("low")))
-            hbar.addWidget(ghost("MÉDIO", lambda: self.apply_hw_preset("medium")))
-            hbar.addWidget(ghost("ALTO", lambda: self.apply_hw_preset("high")))
+            hbar.addWidget(lbl(tr("PRESET DE HARDWARE:"), "tag"))
+            hbar.addWidget(ghost(tr("BAIXO"), lambda: self.apply_hw_preset("low")))
+            hbar.addWidget(ghost(tr("MÉDIO"), lambda: self.apply_hw_preset("medium")))
+            hbar.addWidget(ghost(tr("ALTO"), lambda: self.apply_hw_preset("high")))
             hbar.addStretch()
             v.addLayout(hbar)
 
             pbar = W.QHBoxLayout()
-            pbar.addWidget(lbl("PRESET RÁPIDO:", "tag"))
+            pbar.addWidget(lbl(tr("PRESET RÁPIDO:"), "tag"))
             pbar.addWidget(ghost("Original", lambda: self.apply_preset("original")))
-            pbar.addWidget(ghost("Cinematográfico", lambda: self.apply_preset("cinematic")))
-            pbar.addWidget(ghost("Nitidez Máxima", lambda: self.apply_preset("sharp")))
+            pbar.addWidget(ghost(tr("Cinematográfico"), lambda: self.apply_preset("cinematic")))
+            pbar.addWidget(ghost(tr("Nitidez Máxima"), lambda: self.apply_preset("sharp")))
             pbar.addStretch()
             v.addLayout(pbar)
 
@@ -1482,17 +2108,17 @@ class Launcher(W.QMainWindow):
         self.hosts[key] = lay
 
         if key == "adv":
-            sc, scl = card("Dados e pastas")
-            scl.addWidget(lbl("Backup e restauração dos cartões de memória "
-                              "(saves/*.ps2mc) e atalhos para as pastas.", "muted"))
+            sc, scl = card(tr("Dados e pastas"))
+            scl.addWidget(lbl(tr("Backup e restauração dos cartões de memória "
+                              "(saves/*.ps2mc) e atalhos para as pastas."), "muted"))
             r1 = W.QHBoxLayout()
-            r1.addWidget(ghost("FAZER BACKUP DOS SAVES", self.backup_save))
-            r1.addWidget(ghost("RESTAURAR BACKUP", self.restore_save))
+            r1.addWidget(ghost(tr("FAZER BACKUP DOS SAVES"), self.backup_save))
+            r1.addWidget(ghost(tr("RESTAURAR BACKUP"), self.restore_save))
             r1.addStretch()
             r2 = W.QHBoxLayout()
-            r2.addWidget(ghost("ABRIR SAVES", lambda: self.open_folder("saves")))
-            r2.addWidget(ghost("ABRIR CAPTURAS (OUT)", lambda: self.open_folder("out")))
-            r2.addWidget(ghost("ABRIR PASTA DO JOGO", lambda: self.open_folder("")))
+            r2.addWidget(ghost(tr("ABRIR SAVES"), lambda: self.open_folder("saves")))
+            r2.addWidget(ghost(tr("ABRIR CAPTURAS (OUT)"), lambda: self.open_folder("out")))
+            r2.addWidget(ghost(tr("ABRIR PASTA DO JOGO"), lambda: self.open_folder("")))
             r2.addStretch()
             scl.addLayout(r1)
             scl.addLayout(r2)
@@ -1503,9 +2129,9 @@ class Launcher(W.QMainWindow):
         self.infos.append(info)
         bar.addWidget(info)
         bar.addStretch()
-        bar.addWidget(ghost("DESCARTAR", self.build_settings))
-        bar.addWidget(ghost("PADRÕES", lambda _=False, k=key: self.restore_defaults(k)))
-        bar.addWidget(ghost("SALVAR", lambda: self.save_settings()))
+        bar.addWidget(ghost(tr("DESCARTAR"), self.build_settings))
+        bar.addWidget(ghost(tr("PADRÕES"), lambda _=False, k=key: self.restore_defaults(k)))
+        bar.addWidget(ghost(tr("SALVAR"), lambda: self.save_settings()))
         v.addLayout(bar)
         return page
 
@@ -1513,15 +2139,15 @@ class Launcher(W.QMainWindow):
         page = W.QWidget()
         v = W.QVBoxLayout(page)
         v.setContentsMargins(36, 30, 36, 22)
-        v.addLayout(header("07 // TELEMETRIA", "Console"))
+        v.addLayout(header(tr("07 // TELEMETRIA"), tr("Console")))
         self.log = W.QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setMaximumBlockCount(5000)
         v.addWidget(self.log, 1)
         bar = W.QHBoxLayout()
         bar.addStretch()
-        bar.addWidget(ghost("LIMPAR", self.log.clear))
-        bar.addWidget(ghost("COPIAR TUDO", lambda: W.QApplication.clipboard()
+        bar.addWidget(ghost(tr("LIMPAR"), self.log.clear))
+        bar.addWidget(ghost(tr("COPIAR TUDO"), lambda: W.QApplication.clipboard()
                             .setText(self.log.toPlainText())))
         v.addLayout(bar)
         return page
@@ -1542,8 +2168,8 @@ class Launcher(W.QMainWindow):
         cur = self.iso.text().strip()
         start = str(Path(cur).parent) if cur else str(Path.home() / "Downloads")
         p, _ = W.QFileDialog.getOpenFileName(
-            self, "Escolher ISO do Ace Combat 5", start,
-            "Imagens de disco (*.iso *.ISO);;Todos (*)")
+            self, tr("Escolher ISO do Ace Combat 5"), start,
+            tr("Imagens de disco (*.iso *.ISO);;Todos (*)"))
         if p:
             self.iso.setText(p)
             self.check_iso()
@@ -1558,15 +2184,15 @@ class Launcher(W.QMainWindow):
         self.st_detail.setText("")
         if not p:
             self.ok = False
-            self.set_status(PAL["@MUTED"], "AGUARDANDO ISO")
+            self.set_status(PAL["@MUTED"], tr("AGUARDANDO ISO"))
         elif not os.path.isfile(p):
             self.ok = False
-            self.set_status(PAL["@RED"], "ARQUIVO NÃO ENCONTRADO")
+            self.set_status(PAL["@RED"], tr("ARQUIVO NÃO ENCONTRADO"))
         else:
             st, serial, msg = verify_iso(p)
             self.ok = st == "ok"
             self.set_status(PAL["@GREEN"] if self.ok else PAL["@RED"],
-                            ("ISO VERIFICADA // %s" % serial) if self.ok else msg)
+                            (tr("ISO VERIFICADA // %s") % serial) if self.ok else msg)
             self.st_detail.setText("%s  ·  %.2f GB" % (
                 os.path.basename(p), os.path.getsize(p) / 1024 ** 3))
         self.play_btn.setEnabled(self.ok or self.proc is not None)
@@ -1579,11 +2205,11 @@ class Launcher(W.QMainWindow):
 
     def backup_save(self):
         if self.proc:
-            W.QMessageBox.warning(self, "Aviso", "Feche o jogo antes de fazer backup dos saves.")
+            W.QMessageBox.warning(self, tr("Aviso"), tr("Feche o jogo antes de fazer backup dos saves."))
             return
         cards = sorted(self.saves_dir().glob("*.ps2mc"))
         if not cards:
-            W.QMessageBox.warning(self, "Aviso", "Nenhum cartão (*.ps2mc) encontrado na pasta saves/ do jogo.")
+            W.QMessageBox.warning(self, tr("Aviso"), tr("Nenhum cartão (*.ps2mc) encontrado na pasta saves/ do jogo."))
             return
         backup_dir = backup_root()
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1592,29 +2218,29 @@ class Launcher(W.QMainWindow):
             for c in cards:
                 dest = backup_dir / ("%s_%s.ps2mc" % (c.stem, ts))
                 shutil.copy2(c, dest)
-                self.log.appendPlainText("[save] Backup criado: %s" % dest)
+                self.log.appendPlainText(tr("[save] Backup criado: %s") % dest)
         except OSError as e:
-            W.QMessageBox.critical(self, "Erro", "Falha no backup:\n%s" % e)
+            W.QMessageBox.critical(self, tr("Erro"), tr("Falha no backup:\n%s") % e)
             return
-        W.QMessageBox.information(self, "Sucesso", "%d cartão(ões) copiado(s) para:\n%s"
+        W.QMessageBox.information(self, tr("Sucesso"), tr("%d cartão(ões) copiado(s) para:\n%s")
                                   % (len(cards), backup_dir))
 
     def restore_save(self):
         if self.proc:
-            W.QMessageBox.warning(self, "Aviso", "Feche o jogo antes de restaurar saves.")
+            W.QMessageBox.warning(self, tr("Aviso"), tr("Feche o jogo antes de restaurar saves."))
             return
         backup_dir = backup_root()
         src, _ = W.QFileDialog.getOpenFileName(
-            self, "Escolher backup para restaurar", str(backup_dir),
-            "Cartão de memória (*.ps2mc)")
+            self, tr("Escolher backup para restaurar"), str(backup_dir),
+            tr("Cartão de memória (*.ps2mc)"))
         if not src:
             return
         src = Path(src)
         m = re.match(r"^(.*)_\d{8}_\d{6}$", src.stem)
         target = self.saves_dir() / ((m.group(1) if m else "card0") + ".ps2mc")
         if W.QMessageBox.question(
-                self, "Restaurar backup",
-                "Substituir %s por %s?\n\nO arquivo atual será salvo antes."
+                self, tr("Restaurar backup"),
+                tr("Substituir %s por %s?\n\nO arquivo atual será salvo antes.")
                 % (target.name, src.name)) != W.QMessageBox.StandardButton.Yes:
             return
         try:
@@ -1625,15 +2251,15 @@ class Launcher(W.QMainWindow):
                 shutil.copy2(target, backup_dir / ("%s_%s_antes-restauro.ps2mc" % (target.stem, ts)))
             shutil.copy2(src, target)
         except OSError as e:
-            W.QMessageBox.critical(self, "Erro", "Falha ao restaurar:\n%s" % e)
+            W.QMessageBox.critical(self, tr("Erro"), tr("Falha ao restaurar:\n%s") % e)
             return
-        self.log.appendPlainText("[save] Restaurado %s -> %s" % (src.name, target))
-        self.notify("SAVE RESTAURADO: %s" % target.name)
+        self.log.appendPlainText(tr("[save] Restaurado %s -> %s") % (src.name, target))
+        self.notify(tr("SAVE RESTAURADO: %s") % target.name)
 
     def open_folder(self, rel_path):
         base = GAME_DIR or self.exe().parent
         if not base.is_dir():
-            W.QMessageBox.warning(self, "Aviso", "Pasta do jogo não encontrada:\n%s" % base)
+            W.QMessageBox.warning(self, tr("Aviso"), tr("Pasta do jogo não encontrada:\n%s") % base)
             return
         p = base / rel_path if rel_path else base
         p.mkdir(exist_ok=True)
@@ -1657,7 +2283,7 @@ class Launcher(W.QMainWindow):
 
     def on_map_changed(self):
         if not self._loading:
-            self.notify("ALTERAÇÕES PENDENTES // CLIQUE EM SALVAR")
+            self.notify(tr("ALTERAÇÕES PENDENTES // CLIQUE EM SALVAR"))
 
     def apply_preset(self, name):
         values = PRESETS[name]
@@ -1671,8 +2297,8 @@ class Launcher(W.QMainWindow):
         finally:
             self._loading = False
         self.apply_deps()
-        self.notify(("PRESET '%s' CARREGADO // CLIQUE EM SALVAR PARA APLICAR" % name.upper())
-                    if n else "SEM OPÇÕES [postfx] NO .INI (rode o jogo uma vez)")
+        self.notify((tr("PRESET '%s' CARREGADO // CLIQUE EM SALVAR PARA APLICAR") % name.upper())
+                    if n else tr("SEM OPÇÕES [postfx] NO .INI (rode o jogo uma vez)"))
 
     def apply_hw_preset(self, name):
         values = HW_PRESETS.get(name)
@@ -1691,9 +2317,9 @@ class Launcher(W.QMainWindow):
         finally:
             self._loading = False
         self.apply_deps()
-        self.notify(("PRESET DE HARDWARE '%s' CARREGADO // CLIQUE EM SALVAR PARA APLICAR"
+        self.notify((tr("PRESET DE HARDWARE '%s' CARREGADO // CLIQUE EM SALVAR PARA APLICAR")
                      % name.upper()) if n
-                    else "SEM CHAVES CORRESPONDENTES NO .INI (rode o jogo uma vez)")
+                    else tr("SEM CHAVES CORRESPONDENTES NO .INI (rode o jogo uma vez)"))
 
     def apply_deps(self):
         by = {(f.sec, f.key): f for f in self.fields.values()}
@@ -1715,17 +2341,17 @@ class Launcher(W.QMainWindow):
                     p.set("4")
                 finally:
                     self._loading = False
-        self.notify("ALTERAÇÕES PENDENTES // CLIQUE EM SALVAR")
+        self.notify(tr("ALTERAÇÕES PENDENTES // CLIQUE EM SALVAR"))
 
     def restore_defaults(self, page):
         path = next((p for p in DEFAULT_INIS if p.is_file()), None)
         if not path:
-            self.notify("ARQUIVO DE PADRÕES NÃO ENCONTRADO")
+            self.notify(tr("ARQUIVO DE PADRÕES NÃO ENCONTRADO"))
             return
         try:
             _lines, entries = load_ini(path)
         except OSError as e:
-            self.notify("Erro ao ler os padrões: %s" % e)
+            self.notify(tr("Erro ao ler os padrões: %s") % e)
             return
         defaults = {(s, k): v.strip() for _i, s, k, v in entries}
         n = 0
@@ -1745,7 +2371,7 @@ class Launcher(W.QMainWindow):
             self.map_editor.load_defaults(defaults)
             n += 1
         self.apply_deps()
-        self.notify("%d PADRÕES CARREGADOS // CLIQUE EM SALVAR PARA APLICAR" % n)
+        self.notify(tr("%d PADRÕES CARREGADOS // CLIQUE EM SALVAR PARA APLICAR") % n)
 
     def build_settings(self):
         self._loading = True
@@ -1767,12 +2393,12 @@ class Launcher(W.QMainWindow):
         self.fields.clear()
         ini = (GAME_DIR or self.exe().parent) / "ac5_settings.ini"
         if not ini.is_file():
-            self.notify("SEM ac5_settings.ini EM %s (rode o jogo uma vez)" % ini)
+            self.notify(tr("SEM ac5_settings.ini EM %s (rode o jogo uma vez)") % ini)
             return
         try:
             self.lines, entries = load_ini(ini)
         except OSError as e:
-            self.notify("Erro ao ler o .ini: %s" % e)
+            self.notify(tr("Erro ao ler o .ini: %s") % e)
             return
         cards, binds = {}, {}
         for idx, sec, key, val in entries:
@@ -1790,15 +2416,15 @@ class Launcher(W.QMainWindow):
         for k in self.hosts:
             self.hosts[k].addStretch()
         self.apply_deps()
-        self.notify("%d OPÇÕES CARREGADAS" % len(self.fields))
+        self.notify(tr("%d OPÇÕES CARREGADAS") % len(self.fields))
 
     def add_mapping_editor(self, binds):
-        c, cl = card("Mapeamento de entrada")
+        c, cl = card(tr("Mapeamento de entrada"))
         if binds:
             self.map_editor = MappingEditor(binds, self.on_map_changed)
             cl.addWidget(self.map_editor)
         else:
-            cl.addWidget(lbl("Sem seções [keyboard] ou [controller] no .ini.", "muted"))
+            cl.addWidget(lbl(tr("Sem seções [keyboard] ou [controller] no .ini."), "muted"))
         self.hosts["map"].addWidget(c)
 
     def add_field(self, lay, sec, key, val, idx, comment=""):
@@ -1852,7 +2478,7 @@ class Launcher(W.QMainWindow):
             i = w.findData(raw)
             if i < 0:
                 # valor fora da lista: mantém-no em vez de o trocar em silêncio
-                w.addItem("Personalizado (%s)" % raw, raw)
+                w.addItem(tr("Personalizado (%s)") % raw, raw)
                 i = w.count() - 1
             w.setCurrentIndex(i)
             get = lambda: str(w.currentData())
@@ -1923,11 +2549,11 @@ class Launcher(W.QMainWindow):
                 save_ini((GAME_DIR or self.exe().parent) / "ac5_settings.ini",
                          self.lines, changes)
             except OSError as e:
-                W.QMessageBox.critical(self, "Erro", "Não foi possível salvar o .ini:\n%s" % e)
+                W.QMessageBox.critical(self, tr("Erro"), tr("Não foi possível salvar o .ini:\n%s") % e)
                 return False
         if not quiet:
             self.build_settings()
-            self.notify("%d ALTERAÇÃO(ÕES) SALVA(S)" % len(changes))
+            self.notify(tr("%d ALTERAÇÃO(ÕES) SALVA(S)") % len(changes))
         return True
 
     # ---------------- lançar ----------------
@@ -1964,9 +2590,9 @@ class Launcher(W.QMainWindow):
             return
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import make_image
-        self.log.appendPlainText("Gerando ps2_image.bin a partir da ISO...")
+        self.log.appendPlainText(tr("Gerando ps2_image.bin a partir da ISO..."))
         out, _base, size = make_image.build_image(self.iso.text().strip(), data)
-        self.log.appendPlainText("ps2_image.bin criado: %s (%d bytes)" % (out, size))
+        self.log.appendPlainText(tr("ps2_image.bin criado: %s (%d bytes)") % (out, size))
 
     def play(self):
         if self.proc:
@@ -1975,7 +2601,7 @@ class Launcher(W.QMainWindow):
         if not self.ok:
             return
         if not self.exe().is_file():
-            W.QMessageBox.critical(self, "Erro", "Executável não encontrado:\n%s"
+            W.QMessageBox.critical(self, tr("Erro"), tr("Executável não encontrado:\n%s")
                                    % self.exe())
             return
         if not self.save_settings(quiet=True):
@@ -1983,7 +2609,7 @@ class Launcher(W.QMainWindow):
         try:
             self.ensure_image()
         except Exception as e:
-            W.QMessageBox.critical(self, "Erro", "Não foi possível gerar o ps2_image.bin:\n%s" % e)
+            W.QMessageBox.critical(self, tr("Erro"), tr("Não foi possível gerar o ps2_image.bin:\n%s") % e)
             return
         self.persist_cfg()
         env = QtCore.QProcessEnvironment.systemEnvironment()
@@ -2002,7 +2628,7 @@ class Launcher(W.QMainWindow):
         cmd = self.build_cmd()
         p.start(cmd[0], cmd[1:])
         self.play_btn.running = True
-        self.play_btn.setText("ABORTAR")
+        self.play_btn.setText(tr("ABORTAR"))
         self.play_btn.update()
         self.goto(6)
 
@@ -2021,27 +2647,27 @@ class Launcher(W.QMainWindow):
         QtCore.QTimer.singleShot(5000, force)
 
     def on_error(self, p, err):
-        self.log.appendPlainText("[erro do processo: %s]" % err)
+        self.log.appendPlainText(tr("[erro do processo: %s]") % err)
         # se nem arrancou, 'finished' nunca é emitido: repõe a interface aqui
         if err == QtCore.QProcess.ProcessError.FailedToStart and p is self.proc:
             self.on_finished(-1, None)
 
     def on_finished(self, code, status):
         crashed = status == QtCore.QProcess.ExitStatus.CrashExit
-        self.log.appendPlainText("[jogo terminou, código %s%s]"
+        self.log.appendPlainText(tr("[jogo terminou, código %s%s]")
                                  % (code, " — CRASH" if crashed else ""))
         if self.proc:
             self.proc.deleteLater()
         self.proc = None
         self.play_btn.running = False
-        self.play_btn.setText("DECOLAR")
+        self.play_btn.setText(tr("DECOLAR"))
         self.check_iso()
 
     def closeEvent(self, e):
         if self.proc:
             if W.QMessageBox.question(
-                    self, "Jogo em execução",
-                    "O jogo ainda está em execução. Encerrar e sair?"
+                    self, tr("Jogo em execução"),
+                    tr("O jogo ainda está em execução. Encerrar e sair?")
             ) != W.QMessageBox.StandardButton.Yes:
                 e.ignore()
                 return
@@ -2055,9 +2681,9 @@ class Launcher(W.QMainWindow):
 
 def main():
     if QtCore is None:
-        print("Falta o Qt6 para Python. Instale com:\n"
+        print(tr("Falta o Qt6 para Python. Instale com:\n"
               "  Linux (Arch): sudo pacman -S pyside6\n"
-              "  Windows/macOS: pip install PySide6")
+              "  Windows/macOS: pip install PySide6"))
         sys.exit(1)
     app = W.QApplication(sys.argv)
     app.setStyleSheet(STYLE)
@@ -2070,7 +2696,7 @@ if __name__ == "__main__":
     if "--selftest" in sys.argv:
         i = sys.argv.index("--selftest")
         if i + 1 >= len(sys.argv):
-            sys.exit("Uso: ac5_launcher.py --selftest caminho/para/jogo.iso")
+            sys.exit(tr("Uso: ac5_launcher.py --selftest caminho/para/jogo.iso"))
         print(verify_iso(sys.argv[i + 1]))
     else:
         main()
