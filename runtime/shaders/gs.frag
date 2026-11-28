@@ -55,11 +55,12 @@ vec4 sample_region_repeat(vec2 tc) {
 int wrap_up(int k, uint mode, int lo, int hi, int size, int s) {
     if (mode == 0u) {
         int period = max(size, 1) * s;
-        return k - period * int(floor(float(k) / float(period)));
+        int m = k % period;
+        return m < 0 ? m + period : m;
     }
     if (mode == 1u) return clamp(k, 0, max(size, 1) * s - 1);
     if (mode == 2u) return clamp(k, lo * s, max(hi, lo) * s + s - 1);
-    int g = int(floor(float(k) / float(s)));
+    int g = k >= 0 ? (k / s) : ((k - s + 1) / s);
     return ((g & lo) | hi) * s + (k - g * s);
 }
 
@@ -75,8 +76,8 @@ vec4 sample_region_repeat_up(vec2 tc) {
                     wrap_up(y0, mv, int(pc.clamp_uv.z), int(pc.clamp_uv.w), th, s));
     ivec2 b = ivec2(wrap_up(x0 + 1, mu, int(pc.clamp_uv.x), int(pc.clamp_uv.y), tw, s),
                     wrap_up(y0 + 1, mv, int(pc.clamp_uv.z), int(pc.clamp_uv.w), th, s));
-    a -= size * ivec2(floor(vec2(a) / vec2(size)));
-    b -= size * ivec2(floor(vec2(b) / vec2(size)));
+    a = ((a % size) + size) % size;
+    b = ((b % size) + size) % size;
     return mix(mix(texelFetch(tex, a, 0), texelFetch(tex, ivec2(b.x, a.y), 0), w.x),
                mix(texelFetch(tex, ivec2(a.x, b.y), 0), texelFetch(tex, b, 0), w.x), w.y);
 }
