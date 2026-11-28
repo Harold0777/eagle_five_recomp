@@ -33,7 +33,8 @@ on Linux systems:
 - **GS draw state cache** — 256-slot direct-mapped cache; hit rate up from 45% to 88%.
 - **EAGLE FIVE launcher (Qt6 / PySide6)** — graphical settings editor with ISO validation,
   preset management, keyboard and gamepad mapping editor (live gamepad capture through
-  SDL3), save backup/restore, and integrated console. The launcher UI is in Portuguese.
+  SDL3), save backup/restore, integrated console, and automatic localization (English by
+  default, plus Portuguese, Spanish, and French based on system locale or `AC5_LAUNCHER_LANG`).
 
 ---
 
@@ -151,10 +152,21 @@ resolution — the remaining cost is Vulkan draw submission and GPU fragment
 work. Diagnostic counters (`fs_miss_*`) are printed in the run summary to
 identify which condition of the memo check fails.
 
-### 3x and 6x removed from the settings menu
+### Launcher automatic localization (EN, PT, ES, FR)
 
-The settings menu now only offers Auto, Native, 2x, 4x, 5x, and 8x. See
-[Known issues](#known-issues) for the reason.
+The graphical launcher (`tools/ac5_launcher.py`) now defaults to **English** and
+automatically adapts to **Portuguese (`pt`)**, **Spanish (`es`)**, or **French (`fr`)**
+from the system locale (`LC_ALL`, `LANGUAGE`, `LANG`). You can also override it manually:
+
+```bash
+AC5_LAUNCHER_LANG=en python3 tools/ac5_launcher.py
+```
+
+### 3x and 6x internal resolution volumetric fix
+
+Fixed seam and border-bleeding artifacts in volumetric effects (clouds, smoke, contrails)
+at 3x and 6x internal resolution on RADV GPUs using exact integer arithmetic in
+`runtime/shaders/gs.frag`. See [Known issues](#known-issues) for technical details.
 
 ---
 
@@ -222,6 +234,7 @@ coordinate by one texel into neighboring atlas sprites.
 `sample_region_repeat_up()` (`runtime/shaders/gs.frag`) with exact integer
 division and modulo arithmetic. Both 3x and 6x (`PS2_UPSCALE=3` / `PS2_UPSCALE=6`)
 now render without volumetric artifacts.
+
 ## Downloads and AppImage
 
 The [latest release page](https://github.com/Harold0777/eagle_five_recomp/releases/latest) has:
